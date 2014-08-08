@@ -1,5 +1,5 @@
 /****************************************************************************
- spheroid_GUI
+ cell_GUI
 ****************************************************************************/
 
 #include <QtGui>
@@ -1943,7 +1943,7 @@ void MainWindow::showSummary(int hr)
     double val;
     int res;
 
-//    LOG_MSG("showSummary");
+    LOG_MSG("showSummary");
 	step++;
     if (step >= newR->nsteps) {
 		LOG_MSG("ERROR: step >= nsteps");
@@ -1956,13 +1956,14 @@ void MainWindow::showSummary(int hr)
 //    hour = summaryData[0]*DELTA_T/(60*60);
 //    hour = summaryData[1]*DELTA_T/60;
 
+
     progress = int(100.*hour/hours);
 	progressBar->setValue(progress);
 	QString hourstr = QString::number(int(hour));
 	hour_display->setText(hourstr);
 
-	QString casename = newR->casename;
     newR->tnow[step] = step;
+    QString casename = newR->casename;
 
     field->setSliceChanged(true);
     if (conc_nc > 0 && field->isConcPlot()) {
@@ -1989,7 +1990,7 @@ void MainWindow::showSummary(int hr)
         QString tag = grph->get_tag(i);
         pGraph[i]->redraw(newR->tnow, newR->pData[i], step+1, casename, tag);
     }
-
+/*
     if (field->sliceChanged() && hour > 0){
         field->displayField(hour,&res);
         if (res != 0) {
@@ -1998,7 +1999,7 @@ void MainWindow::showSummary(int hr)
             stopServer();
         }
     }
-
+*/
     exthread->mutex1.unlock();
     exthread->summary_done.wakeOne();
 }

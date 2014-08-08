@@ -30,15 +30,15 @@ GRAPH_SET tsGraphSet[] = {
     3, false, 0, 1, true},
 
     {"diameter",
-    "Spheroid Diameter",
+    "Diameter",
     "Diameter (um)",
-     "Spheroid diameter (um)",
+     "Diameter (um)",
     4, true, 0, 1, true},
 
     {"volume",
-    "Spheroid Volume",
+    "Volume",
     "Volume (mm3)",
-     "Spheroid volume (mm3)",
+     "Volume (mm3)",
     5, true, 0, 0.00001, true},
 
     {"growthfraction",

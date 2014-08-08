@@ -24,6 +24,7 @@ integer, parameter :: QUIESCENT = 2
 integer, parameter :: DEAD      = 3
 
 integer, parameter :: OUTSIDE_TAG  = -1
+integer, parameter :: INACCESSIBLE_TAG  = -2
 
 integer, parameter :: DIVIDE_ALWAYS_PUSH  = 1
 integer, parameter :: DIVIDE_USE_CLEAR_SITE  = 2
@@ -111,6 +112,7 @@ integer :: initial_count
 integer, allocatable :: zdomain(:),zoffset(:)
 integer :: blobrange(3,2)
 real(REAL_KIND) :: x0,y0,z0   ! centre in global coordinates (units = grids)
+integer :: ywall
 real(REAL_KIND) :: Radius, Centre(3)
 real(REAL_KIND) :: adrop, bdrop, cdrop	! drop shape transformation parameters
 real(REAL_KIND) :: z0drop				! drop centre is at z0drop = zmin + (bdrop-cdrop)*R
@@ -133,7 +135,7 @@ real(REAL_KIND) :: t_simulation, execute_t1
 real(REAL_KIND) :: O2cutoff(3)
 real(REAL_KIND) :: growthcutoff(3)
 real(REAL_KIND) :: spcrad_value
-real(REAL_KIND) :: signal_decay_coef
+real(REAL_KIND) :: signal_max, signal_decay_coef
 logical :: bdry_changed
 character*(128) :: inputfile
 character*(128) :: outputfile

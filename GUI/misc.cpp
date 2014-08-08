@@ -171,7 +171,6 @@ void ExecThread::run()
     mutex1.unlock();
     emit summary(hour);		// Emit signal to initialise summary plots
     summary_done.wait(&mutex3);
-//    wait_to_go();
 
     for (int i=1; i <= nsteps+1; i++) {
 		bool updated = false;
@@ -196,8 +195,12 @@ void ExecThread::run()
         }
 
         if (i%nsumm_interval == 0) {
-			mutex1.lock();
+//          if (i%nsumm_interval == -1) {
+            mutex1.lock();
             get_summary(summaryData, &i_hypoxia_cutoff, &i_growth_cutoff);
+//            conc_nc = 0;
+//            vol_nv = 0;
+//            oxy_nv = 0;
             get_concdata(&conc_nc, &conc_dx, concData);
             get_volprob(&vol_nv, &vol_v0, &vol_dv, volProb);
             get_oxyprob(&oxy_nv, &oxy_dv, oxyProb);
@@ -212,7 +215,8 @@ void ExecThread::run()
             break;
         }
         if (i%nt_vtk == 0) {
-			if (showingVTK != 0) {
+//          if (i%nt_vtk == -1) {
+            if (showingVTK != 0) {
 				snapshot();
                 istep = i;
                 sleep(10);

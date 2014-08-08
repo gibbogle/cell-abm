@@ -1,8 +1,8 @@
 
 ! Main program
 !-----------------------------------------------------------------------------------------
-PROGRAM spheroid_main
-use spheroid_mod
+PROGRAM cells_main
+use cells_mod
 use global
 implicit none
 integer :: ncpu, res, summarydata(100)
@@ -14,11 +14,11 @@ character*(128) :: b, c, progname
 real :: vasc
 real(8) :: t1, t2
 
-runfile = 'spheroid_main.out'
+runfile = 'cells_main.out'
 open(nfrun,file=runfile,status='replace')
 call disableTCP
 
-outfile = 'spheroid_main.res'
+outfile = 'cells_main.res'
 
 call get_command (b, nlen, status)
 if (status .ne. 0) then

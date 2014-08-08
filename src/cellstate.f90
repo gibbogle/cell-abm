@@ -351,7 +351,7 @@ integer :: kcell, nlist0, site(3)
 integer :: divide_list(10000), ndivide, i, xmax, xmin, dx
 real(REAL_KIND) :: interval_dt, cellml_dt
 real(REAL_KIND) :: size0, size1, g0, g1, r0, r1
-real(REAL_KIND) :: signal, signalmax = 2.0, kdecay = 0.5, g_rate, R_max, Hill_Km, Hill_n
+real(REAL_KIND) :: signal, g_rate, R_max, Hill_Km, Hill_n
 
 real(REAL_KIND) :: tnow, C_O2, metab, dVdt, vol0	!, r_mean, c_rate
 real(REAL_KIND) :: Vin_0, Vex_0, dV
@@ -380,7 +380,7 @@ do kcell = 1,nlist0
 	r0 = cell_list(kcell)%cellml_state(5)
 	size0 = cell_list(kcell)%cellml_state(2)
 	dx = xmax - cell_list(kcell)%site(1)
-	signal = signalmax*exp(-signal_decay_coef*dx)	
+	signal = signal_max*exp(-signal_decay_coef*dx)	
 	g_rate = 0.12	! 5
 	R_max = 0.1		! 6
 	Hill_Km = 0.33	! 7
@@ -560,8 +560,11 @@ if (divide_option == DIVIDE_USE_CLEAR_SITE .or. &			! look for the best nearby c
 	endif
 endif
 
-j = random_int(1,6,kpar)
-site01 = site0 + neumann(:,j)
+do
+	j = random_int(1,6,kpar)
+	site01 = site0 + neumann(:,j)
+	if (site01(2) > ywall) exit
+enddo
 !if (dbug) write(*,*) 'CellDivider: ',kcell0,site0,occupancy(site0(1),site0(2),site0(3))%indx
 if (occupancy(site01(1),site01(2),site01(3))%indx(1) == OUTSIDE_TAG) then	! site01 is outside, use it directly
 	npath = 0
@@ -573,7 +576,7 @@ elseif (bdrylist_present(site01,bdrylist)) then	! site01 is on the boundary
 else
 	call ChooseBdrysite(site01,site1)
 	if (occupancy(site1(1),site1(2),site1(3))%indx(1) == 0) then
-		write(*,*) 'after choose_bdrysite: site1 is VACANT: ',site1
+		write(*,*) 'after ChooseBdrysite: site1 is VACANT: ',site1
 		stop
 	endif
 	if (dbug) write(*,'(a,i6,9i4)') 'b4 ',kcell0,site0,site01,site1
@@ -773,9 +776,13 @@ if (dbug) write(*,*) 'ChooseBdrysite: ',site0
 vc = site0 - Centre
 r = norm(vc)
 vc = vc/r
-rfrac = r/Radius
-alpha_max = getAlphaMax(rfrac)
-cosa_min = cos(alpha_max)
+if (ywall == 0) then
+	rfrac = r/Radius
+	alpha_max = getAlphaMax(rfrac)
+	cosa_min = cos(alpha_max)
+else
+	cosa_min = 0	! for the half-plane
+endif
 dmin = 1.0e10
 hit = .false.
 bdry => bdrylist
@@ -794,7 +801,7 @@ do while ( associated ( bdry ))
     bdry => bdry%next
 enddo
 if (.not.hit) then
-	write(logmsg,*) 'Error: choose_bdrysite: no candidate bdry site'
+	write(logmsg,*) 'Error: ChooseBdrysite: no candidate bdry site'
 	call logger(logmsg)
 	stop
 endif
@@ -992,7 +999,6 @@ integer :: kpar = 0
 real(REAL_KIND) :: tnow, R, c_rate,r_mean
 
 ok = .true.
-!write(*,*) 'AddCell'
 tnow = istep*DELTA_T
 nlist = nlist + 1
 if (nlist > max_nlist) then
@@ -1002,6 +1008,11 @@ if (nlist > max_nlist) then
 endif
 Ncells = Ncells + 1
 kcell1 = nlist
+if (site1(2) <= ywall) then
+	write(*,*) 'AddCell: error: y < ywall: ',kcell0,kcell1,site1
+	write(nflog,*) 'AddCell: error: y < ywall: ',kcell0,kcell1,site1
+	stop
+endif
 allocate(cell_list(kcell1)%cellml_state(0:nvariables-1))
 cell_list(kcell1)%cellml_state = cell_list(kcell0)%cellml_state
 cell_list(kcell1)%celltype = cell_list(kcell0)%celltype
@@ -1037,6 +1048,11 @@ rmin = 1.0e10
 rmax = 0
 do kcell = 1,nlist
 	site = cell_list(kcell)%site
+	if (site(2) <= ywall) then
+		write(*,*) 'check_bdry: Error: y <= ywall: ',kcell, site
+		write(nflog,*) 'check_bdry: Error: y <= ywall: ',kcell, site
+		stop
+	endif
 	bdry = .false.
 	do i = 1,6
 		site1 = site + neumann(:,i)

@@ -155,7 +155,8 @@ do x = 1,NX
 	do y = 1,NY
 		do z = 1,NZ
 		    kcell = occupancy(x,y,z)%indx(1)
-			if (kcell /= OUTSIDE_TAG) then
+!			if (kcell /= OUTSIDE_TAG) then
+			if (kcell >= 0) then
 				i = i + 1
 !				isite = isite + 1
 				nex = nex + 1
@@ -377,7 +378,7 @@ n = ODEdiff%nextra + 1
 if (n > MAX_VARS) then
 	write(logmsg,*) 'Error: ExtendODEdiff: Too many variables: n > MAX_VARS: ',MAX_VARS
 	call logger(logmsg)
-	write(logmsg,*) 'Increase MAX_VARS and rebuild spheroid.DLL'
+	write(logmsg,*) 'Increase MAX_VARS and rebuild cells.DLL'
 	call logger(logmsg)
 	stop
 endif
@@ -517,12 +518,11 @@ do i = 1,ODEdiff%nvars
     if (ODEdiff%vartype(i) == EXTRA) then
         occupancy(site(1),site(2),site(3))%C(:) = allstate(i,:)
     else
-!        kcell = occupancy(site(1),site(2),site(3))%indx(1)
         kcell = ODEdiff%cell_index(i)
         cell_list(kcell)%conc(:) = allstate(i,:)
+!		write(nflog,*) i,kcell,site
     endif
 enddo
-
 end subroutine
 
 

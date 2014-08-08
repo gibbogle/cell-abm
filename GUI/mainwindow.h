@@ -13,11 +13,7 @@
 
 using namespace std;
 
-//#ifdef __DISPLAY768
-//#include "ui_spheroid_GUI-768.h"
-//#else
 #include "ui_cells_GUI.h"
-//#endif
 #include <qwt_plot_curve.h>
 #include "params.h"
 #include "qmylabel.h"

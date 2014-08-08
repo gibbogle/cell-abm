@@ -22,8 +22,8 @@ The shape value must be greater than 1, and values close to 1 give distributions
 "Dimension of the lattice (number of sites in X,Y and Z directions).  Typically 5*BLOB_RADIUS is OK."},
 
 {"INITIAL_COUNT", 1000, 0, 0,
-"Initial number of tumour cells",
-"Initial number of tumour cells"},
+"Initial number of cells",
+"Initial number of cells"},
 
 {"DIVIDE_TIME_MEDIAN", 24, 0, 0,
 "Division time median parameter",

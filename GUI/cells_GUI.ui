@@ -17,7 +17,7 @@
    </font>
   </property>
   <property name="windowTitle">
-   <string>Tumour Spheroid ABM</string>
+   <string>Cells ABM</string>
   </property>
   <property name="windowIcon">
    <iconset>

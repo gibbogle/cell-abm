@@ -18,12 +18,13 @@ outside_xyz = .true.
 if (x < 1 .or. x > NX) return
 if (y < 1 .or. y > NY) return
 if (z < 1 .or. z > NZ) return
+if (y <= ywall) return
 outside_xyz = .false.
 end function
 
-!----------------------------------------------------------------------------------------
-! A boundary site is inside and has at least one Neumann neighbour outside the blob.
-!----------------------------------------------------------------------------------------
+!----------------------------------------------------------------------------------------------
+! A boundary site is inside and has at least one accessible Neumann neighbour outside the blob.
+!----------------------------------------------------------------------------------------------
 logical function isbdry(site)
 integer :: site(3)
 integer :: x, y, z
@@ -420,7 +421,7 @@ end subroutine
 !-----------------------------------------------------------------------------------------
 subroutine getoutsidesite(site1,site2)
 integer :: site1(3), site2(3)
-integer :: j, jmin, site(3)
+integer :: j, jmin, site(3), indx
 real(REAL_KIND) :: r, rmin
 
 rmin = 1.0e10
@@ -428,8 +429,9 @@ do j = 1,27
 	if (j == 14) cycle
 !	site = site1 + neumann(:,j)
 	site = site1 + jumpvec(:,j)
-!	if (occupancy(site(1),site(2),site(3))%indx(1) == OUTSIDE_TAG) then
-	if (occupancy(site(1),site(2),site(3))%indx(1) <= 0) then
+	indx = occupancy(site(1),site(2),site(3))%indx(1)
+	if (indx == OUTSIDE_TAG .or. indx == 0) then
+!	if (indx <= 0) then
 		r = cdistance(site)
 		if (r < rmin) then
 			rmin = r

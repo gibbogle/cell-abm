@@ -113,6 +113,7 @@ character*(*) :: infile, outfile
 logical :: ok
 character*(64) :: msg
 integer :: error
+real(REAL_KIND), allocatable :: state(:)
 
 ok = .true.
 initialized = .false.
@@ -154,6 +155,11 @@ call SetupChemo
 if (.not.use_TCP) then
 	call loadCellML
 endif
+
+allocate(state(0:nvariables-1))
+call getState(state)	
+signal_max = state(4)	! Note that this is hard-wired for a specific CellML model!!!!!
+deallocate(state)
 
 call PlaceCells(ok)
 call SetRadius(Nsites)
@@ -364,6 +370,7 @@ x0 = (NX + 1.0)/2.        ! global value
 y0 = (NY + 1.0)/2.
 z0 = (NZ + 1.0)/2.
 Centre = (/x0,y0,z0/)   ! now, actually the global centre (units = grids)
+ywall = y0-1
 call SetRadius(initial_count)
 write(logmsg,*) 'Initial radius, nc0, max_nlist: ',Radius, initial_count, max_nlist
 call logger(logmsg)
@@ -573,14 +580,17 @@ real(REAL_KIND),allocatable :: state(:)
 
 allocate(state(0:nvariables-1))
 call getState(state)
-occupancy(:,:,:)%indx(1) = 0
-occupancy(:,:,:)%indx(2) = 0
+occupancy(:,:,:)%indx(1) = OUTSIDE_TAG
+occupancy(:,1:ywall,:)%indx(1) = INACCESSIBLE_TAG
 Radius = max(Radius,1.)
 r2lim = Radius*Radius
+if (ywall > 0) then
+	r2lim = sqrt(2.0)*r2lim
+endif
 lastID = 0
 k = 0
 do x = 1,NX
-	do y = 1,NY
+	do y = ywall+1,NY
 		do z = 1,NZ
 			rad = (/x-x0,y-y0,z-z0/)
 			r2 = dot_product(rad,rad)
@@ -628,7 +638,8 @@ do x = 1,NX
 !				cell_list(k)%cellml_state(1) = 1.5 ! growth
 !				cell_list(k)%cellml_state(2) = 1.5 ! size
 				occupancy(x,y,z)%indx(1) = k
-				if (x == NX/2 .and. y == NY/2 .and. z == NZ/2) then
+!				write(nflog,*) k,x,y,z
+				if (x == NX/2 .and. y == NY/2 + 1 .and. z == NZ/2) then
 					idbug = k
 					write(nfout,*) 'Mid-blob cell: idbug: ',idbug, x,y,z
 				endif
@@ -653,6 +664,7 @@ deallocate(state)
 ok = .true.
 write(logmsg,*) 'idbug: ',idbug
 call logger(logmsg)
+write(nflog,*) 'ncells, nsites, ywall: ',ncells,nsites,ywall
 end subroutine
 
 
@@ -732,6 +744,7 @@ if (mod(istep,nthour) == 0) then
 	write(logmsg,*) 'istep, hour: ',istep,istep/nthour,nlist,ncells,nsites-ncells
 	call logger(logmsg)
 	if (bdry_changed) then
+		write(nflog,*) 'UpdateBdryList'
 		call UpdateBdrylist
 	endif
 !	write(logmsg,'(a,2e12.3,i6)') 'Oxygen U, Cbnd, Nbnd: ', chemo(OXYGEN)%medium_U,chemo(OXYGEN)%medium_Cbnd, Nbnd
@@ -759,12 +772,14 @@ if (.not.ok) then
 	call logger(logmsg)
 	return
 endif
-	
-	! Update Cbnd using current M, R1 and previous U, Cext
-	call UpdateCbnd
 
+	! Update Cbnd using current M, R1 and previous U, Cext
+	! The results of these subroutines are not really used currently!
+	! They just slow the simulation down a bit.
+	call UpdateCbnd
 	call SetupODEdiff
 	call SiteCellToState
+	
 !	do it_solve = 1,NT_CONC
 !		tstart = (it_solve-1)*dt
 !		t_simulation = (istep-1)*DELTA_T + tstart
@@ -990,10 +1005,10 @@ end function
 ! Total deaths = Ndead
 ! Current tagged = Ntodie - Ntagdead 
 !-----------------------------------------------------------------------------------------
-subroutine get_summary(summaryData, i_growth_cutoff) BIND(C)
+subroutine get_summary(summaryData, i_hypoxia_cutoff, i_growth_cutoff) BIND(C)
 !DEC$ ATTRIBUTES DLLEXPORT :: get_summary
 use, intrinsic :: iso_c_binding
-integer(c_int) :: summaryData(*), i_growth_cutoff
+integer(c_int) :: summaryData(*), i_growth_cutoff, i_hypoxia_cutoff
 integer :: Ndead, Ntagged, Ntodie, Ntagdead, diam_um, vol_mm3_100000
 integer :: ngrowth(3), growth_percent_10, necrotic_percent_10,Ntagged_anoxia
 real(REAL_KIND) :: vol_cm3, vol_mm3, hour
@@ -1409,8 +1424,8 @@ do i = 1,outbuflen
 	outfile(i:i) = outfile_array(i)
 enddo
 
-open(nflog,file='spheroid.log',status='replace')
-open(nfres,file='spheroid_ts.out',status='replace')
+open(nflog,file='cells.log',status='replace')
+open(nfres,file='cells_ts.out',status='replace')
 write(nfres,'(a)') 'istep hour vol_mm3 diam_um Ncells &
  f_growth_1 f_growth_2 f_growth_3'
 
@@ -1482,7 +1497,7 @@ subroutine DisableTCP
 !DEC$ ATTRIBUTES DLLEXPORT :: disableTCP
 !DEC$ ATTRIBUTES STDCALL, REFERENCE, MIXED_STR_LEN_ARG, ALIAS:"DISABLETCP" :: disableTCP
 
-use_TCP = .false.   ! because this is called from spheroid_main()	
+use_TCP = .false.   ! because this is called from cell_main()	
 end subroutine
 
 !-----------------------------------------------------------------------------------------
