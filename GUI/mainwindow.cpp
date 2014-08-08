@@ -190,7 +190,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     pushButtonLoadCellMLFile->setEnabled(false);
     tabs->setCurrentIndex(3);   //tab_run
-
+    cellML_loaded = false;
     goToInputs();
 }
 
@@ -393,7 +393,7 @@ void MainWindow:: setupCellML()
             component->line_list[ivar]->setAlignment(Qt::AlignRight);
         }
     }
-
+    cellML_loaded = true;
 /*
     ncomponents = 2;
     component_list.clear();
@@ -1633,6 +1633,11 @@ void MainWindow::showGradient3D()
 //--------------------------------------------------------------------------------------------------------
 void MainWindow::runServer()
 {
+    if (!cellML_loaded) {
+        QMessageBox::warning(this, tr("cells_ABM"),
+                             tr("CellML file not loaded"));
+        return;
+    }
 	if (paused) {
 		if (vtk->playing) {
 			vtk->playon();
@@ -3954,6 +3959,7 @@ void MainWindow::on_pushButtonGetCellMLFile_clicked()
     fileName = "file:///" + fileName;
     text_CELLML_FILE->setText(fileName);
     pushButtonLoadCellMLFile->setEnabled(true);
+    cellML_loaded = false;
 }
 
 void MainWindow::on_pushButtonLoadCellMLFile_clicked()

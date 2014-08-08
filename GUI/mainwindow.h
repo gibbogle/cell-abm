@@ -257,6 +257,7 @@ private:
 	bool firstVTK;
 	bool playingVTK;
 	int tickVTK;
+    bool cellML_loaded;
 	int currentDescription;
 	QString defaultInputFile;
 	QString inputFile;
