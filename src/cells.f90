@@ -26,8 +26,11 @@ enddo
 call loadCellML
 nvar = nvariables
 ncomp = ncomponents
+write(nflog,*) 'Loaded CellML model successfully'
 end subroutine
 
+!-----------------------------------------------------------------------------------------
+!-----------------------------------------------------------------------------------------
 subroutine loadCellML
 character(64) :: ID, comp_name
 logical :: hit
@@ -37,7 +40,6 @@ if (allocated(IDlist)) deallocate(IDlist)
 if (allocated(csim_state)) deallocate(csim_state)
 if (allocated(csim_savestate)) deallocate(csim_savestate)
 if (allocated(component)) deallocate(component)
-!cellmlfile = "file:///E:/testing/CSim/VPH-MIP_Case_Study/experiments/periodic-stimulus.xml"C
 call setupCellml(cellmlfile)
 call getNvariables(nvariables)
 write(nflog,*) 'nvariables: ',nvariables
@@ -74,13 +76,12 @@ do k = 0,nvariables-1
 		endif
 	endif		
 enddo
-write(nflog,*) 'Components: '
-write(nflog,'(a)') component(1:ncomponents)
+write(nflog,*) 'Components: #: ',ncomponents
+write(nflog,'(a)') component(0:ncomponents-1)
 write(nflog,*) 'Variables: '
 do k = 0,nvariables-1
 	write(nflog,'(i4,2x,2a30,i3)') k,IDlist(k)%comp_name(1:30),IDlist(k)%var_name(1:30),IDlist(k)%comp_index
 enddo
-
 end subroutine
 
 !-----------------------------------------------------------------------------------------
@@ -157,8 +158,16 @@ if (.not.use_TCP) then
 endif
 
 allocate(state(0:nvariables-1))
-call getState(state)	
-signal_max = state(4)	! Note that this is hard-wired for a specific CellML model!!!!!
+call getState(state)	! This gets the initial values of all state variables
+if (CellML_model == CELLML_CELL_CYCLE) then
+	signal_max = state(4)	! Note that this is hard-wired for a specific CellML model!!!!!
+elseif (CellML_model == CELLML_WNT_CYCLIN) then
+	cell_cycle_endtime(1) = cell_cycle_fraction(1)*cell_cycle_duration
+	cell_cycle_endtime(2) = cell_cycle_endtime(1) + cell_cycle_fraction(2)*cell_cycle_duration
+	cell_cycle_endtime(3) = cell_cycle_endtime(2) + cell_cycle_fraction(3)*cell_cycle_duration
+	cell_cycle_endtime(4) = cell_cycle_duration
+	cell_cycle_rate = 1/(cell_cycle_duration*(cell_cycle_fraction(1) + cell_cycle_fraction(2)))
+endif
 deallocate(state)
 
 call PlaceCells(ok)
@@ -573,13 +582,14 @@ end subroutine
 !-----------------------------------------------------------------------------------------
 subroutine PlaceCells(ok)
 logical :: ok
-integer :: x, y, z, k, site(3), ichemo, kpar=0
+integer :: x, y, z, k, site(3), ichemo, i, kpar=0
 real(REAL_KIND) :: r2lim,r2,rad(3)
 real(REAL_KIND) :: R, tpast, tdiv, c_rate, r_mean
-real(REAL_KIND),allocatable :: state(:)
+real(REAL_KIND) :: tcycle
+!real(REAL_KIND),allocatable :: state(:)
 
-allocate(state(0:nvariables-1))
-call getState(state)
+allocate(state0(0:nvariables-1))
+call getState(state0)
 occupancy(:,:,:)%indx(1) = OUTSIDE_TAG
 occupancy(:,1:ywall,:)%indx(1) = INACCESSIBLE_TAG
 Radius = max(Radius,1.)
@@ -599,44 +609,58 @@ do x = 1,NX
 				lastID = lastID + 1
 				site = (/x,y,z/)
 				cell_list(k)%ID = lastID
-				cell_list(k)%celltype = random_choice(celltype_fraction,Ncelltypes,kpar)
 				cell_list(k)%site = site
-				cell_list(k)%state = 1
 				cell_list(k)%exists = .true.
 				cell_list(k)%active = .true.
-!				do
-!					R = par_uni(kpar)
-!					tpast = -R*divide_time_median
-!					tdiv = DivideTime()
-!					if (tdiv + tpast > 0) exit
-!				enddo
-!				cell_list(k)%divide_volume = Vdivide0
-				R = par_uni(kpar)
-				cell_list(k)%divide_volume = Vdivide0 + dVdivide*(2*R-1)
-				R = par_uni(kpar)
-				if (randomise_initial_volume) then
-					cell_list(k)%volume = cell_list(k)%divide_volume*0.5*(1 + R)
-				else
-					cell_list(k)%volume = 1.0
-				endif
-				call getGrowthRateParameters(c_rate,r_mean)
-				cell_list(k)%c_rate = c_rate
-				cell_list(k)%r_mean = r_mean
-				cell_list(k)%t_divide_last = 0		! not used
-				cell_list(k)%t_hypoxic = 0
-				cell_list(k)%conc = 0
-				cell_list(k)%conc(OXYGEN) = chemo(OXYGEN)%bdry_conc
-				cell_list(k)%conc(GLUCOSE) = chemo(GLUCOSE)%bdry_conc
-				cell_list(k)%conc(TRACER) = chemo(TRACER)%bdry_conc
-				cell_list(k)%M = 0
 				allocate(cell_list(k)%cellml_state(0:nvariables-1))
-				cell_list(k)%cellml_state = state
-				! Now randomise the growth stage
-				R = par_uni(kpar)
-				cell_list(k)%cellml_state(1) = 1.0 + (2.2 - 1.0)*R	! growth
-				cell_list(k)%cellml_state(2) = 1.0 + (2.0 - 1.0)*R	! size
-!				cell_list(k)%cellml_state(1) = 1.5 ! growth
-!				cell_list(k)%cellml_state(2) = 1.5 ! size
+				cell_list(k)%cellml_state = state0
+				if (CellML_model == CELLML_CELL_CYCLE) then
+					cell_list(k)%state = 1
+					cell_list(k)%celltype = random_choice(celltype_fraction,Ncelltypes,kpar)
+					R = par_uni(kpar)
+					cell_list(k)%divide_volume = Vdivide0 + dVdivide*(2*R-1)
+					R = par_uni(kpar)
+					if (randomise_initial_volume) then
+						cell_list(k)%volume = cell_list(k)%divide_volume*0.5*(1 + R)
+					else
+						cell_list(k)%volume = 1.0
+					endif
+					call getGrowthRateParameters(c_rate,r_mean)
+					cell_list(k)%c_rate = c_rate
+					cell_list(k)%r_mean = r_mean
+					cell_list(k)%t_divide_last = 0		! not used
+					cell_list(k)%t_hypoxic = 0
+					cell_list(k)%conc = 0
+					! Now randomise the growth stage
+					R = par_uni(kpar)
+					cell_list(k)%cellml_state(1) = 1.0 + (2.2 - 1.0)*R	! growth
+					cell_list(k)%cellml_state(2) = 1.0 + (2.0 - 1.0)*R	! size
+				elseif (CellML_model == CELLML_WNT_CYCLIN) then
+					R = par_uni(kpar)
+					tcycle = R*cell_cycle_duration
+					cell_list(k)%cell_cycle_t = tcycle
+					cell_list(k)%cell_cycle_entry_time = -tcycle
+					call UpdateCellCycle(i,tcycle)
+!					do i = 1,4
+!						if (tcycle <= cell_cycle_endtime(i)) then
+!							cell_list(k)%cell_cycle_phase = i
+!							if (i == 1) then
+!								cell_list(k)%volume = 1 + cell_cycle_rate*tcycle
+!							elseif (i == 2) then
+!								cell_list(k)%volume = 1 + cell_cycle_rate*cell_cycle_endtime(1)
+!							elseif (i == 3) then
+!								cell_list(k)%volume = 1 + cell_cycle_rate*(cell_cycle_endtime(1) + tcycle)
+!							else
+!								cell_list(k)%volume = 2
+!							endif
+!							exit
+!						endif
+!					enddo
+				endif
+!				cell_list(k)%conc(OXYGEN) = chemo(OXYGEN)%bdry_conc
+!				cell_list(k)%conc(GLUCOSE) = chemo(GLUCOSE)%bdry_conc
+!				cell_list(k)%conc(TRACER) = chemo(TRACER)%bdry_conc
+!				cell_list(k)%M = 0
 				occupancy(x,y,z)%indx(1) = k
 !				write(nflog,*) k,x,y,z
 				if (x == NX/2 .and. y == NY/2 + 1 .and. z == NZ/2) then
@@ -652,15 +676,15 @@ enddo
 do ichemo = 1,MAX_CHEMO
     occupancy(:,:,:)%C(ichemo) = 0
 enddo
-occupancy(:,:,:)%C(OXYGEN) = chemo(OXYGEN)%bdry_conc
-occupancy(:,:,:)%C(GLUCOSE) = chemo(GLUCOSE)%bdry_conc
-occupancy(:,:,:)%C(TRACER) = chemo(TRACER)%bdry_conc
+!occupancy(:,:,:)%C(OXYGEN) = chemo(OXYGEN)%bdry_conc
+!occupancy(:,:,:)%C(GLUCOSE) = chemo(GLUCOSE)%bdry_conc
+!occupancy(:,:,:)%C(TRACER) = chemo(TRACER)%bdry_conc
 nlist = k
 Nsites = k
 Ncells = k
 Ncells0 = Ncells
 Nreuse = 0	
-deallocate(state)
+!deallocate(state)
 ok = .true.
 write(logmsg,*) 'idbug: ',idbug
 call logger(logmsg)
@@ -923,11 +947,19 @@ do kcell = 1,nlist
 !		endif
 		TC_list(j+1) = kcell + last_id1
 		TC_list(j+2:j+4) = site
-		cell_g = cell_list(kcell)%cellml_state(1)
-		cell_size = cell_list(kcell)%cellml_state(2)
-		cell_r = (cell_size/cell_size_max)**(1./3.)
-		TC_list(j+5) = cell_g*100			! 100*growth_stage
-		TC_list(j+6) = min(1.0,cell_r)*100	! 100*fractional radius
+		if (CellML_model == CELLML_CELL_CYCLE) then
+			cell_g = cell_list(kcell)%cellml_state(1)
+			cell_size = cell_list(kcell)%cellml_state(2)
+			cell_r = (cell_size/cell_size_max)**(1./3.)
+			TC_list(j+5) = cell_g*100			! 100*growth_stage
+			TC_list(j+6) = min(1.0,cell_r)*100	! 100*fractional radius
+		elseif (CellML_model == CELLML_WNT_CYCLIN) then
+			cell_g = cell_list(kcell)%cell_cycle_t/cell_cycle_duration
+			cell_size = cell_list(kcell)%volume
+			cell_r = (cell_size/cell_size_max)**(1./3.)
+			TC_list(j+5) = cell_g*100			! 100*growth_stage
+			TC_list(j+6) = min(1.0,cell_r)*100	! 100*fractional radius		
+		endif
 !		TC_list(j+5) = colour
 !		TC_list(j+6) = highlight
 		last_id2 = kcell + last_id1

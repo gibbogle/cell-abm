@@ -281,6 +281,15 @@ The shape value must be greater than 1, and values close to 1 give distributions
 "Use parallel O2 relaxation solver",
 "Use over- and under-relaxation to solve reaction-diffusion for oxygen, with parallelized over-relaxation"},
 
+{"CELL_CYCLE_TIME", 24.0,0,0,
+ "Cell cycle time",
+ "Time for the cell to complete the cell cycle"},
+
+{"SIGNAL_MAX", 1.0,0,0,
+ "Maximum signal",
+ "Signal strength is maxmum at the right side of the blob (max x), and decays with distance d in the negative x direction by: \n\
+  S = Smax.exp(-Kdecay*d) where d is the number of grids"},
+
 {"SIGNAL_DECAY_COEF", 0.5, 0, 0,
 "Signal decay coefficient",
 "Signal strength is maxmum at the right side of the blob (max x), and decays with distance d in the negative x direction by: \n\

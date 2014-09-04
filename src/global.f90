@@ -56,6 +56,18 @@ logical, parameter :: suppress_growth = .false.
 logical, parameter :: randomise_divide_time = .true.
 logical, parameter :: vary_conc = .false.
 
+integer, parameter :: CELL_CYCLE_G0 = 0
+integer, parameter :: CELL_CYCLE_G1 = 1
+integer, parameter :: CELL_CYCLE_S  = 2
+integer, parameter :: CELL_CYCLE_G2 = 3
+integer, parameter :: CELL_CYCLE_M  = 4
+integer, parameter :: CELL_CYCLE_D  = 5		! due to divide
+
+real(REAL_KIND), parameter :: cell_cycle_fraction(4) = [0.4, 0.2, 0.3, 0.1]
+
+integer, parameter :: CELLML_CELL_CYCLE = 0
+integer, parameter :: CELLML_WNT_CYCLIN = 1
+
 real(REAL_KIND), parameter :: PI = 4.0*atan(1.0)
 
 type occupancy_type
@@ -71,6 +83,10 @@ type cell_type
 	integer :: iv
 	logical :: active
 	integer :: state
+	integer :: cell_cycle_phase
+	real(REAL_KIND) :: cell_cycle_entry_time
+	real(REAL_KIND) :: cell_cycle_t
+	logical :: divide_flag
 	real(REAL_KIND) :: conc(MAX_CHEMO)
 	real(REAL_KIND) :: dVdt
 	real(REAL_KIND) :: c_rate, r_mean
@@ -106,6 +122,7 @@ end type
 type(dist_type) :: divide_dist
 type(occupancy_type), allocatable :: occupancy(:,:,:)
 type(cell_type), allocatable :: cell_list(:)
+real(REAL_KIND),allocatable :: state0(:)
 
 integer :: NX, NY, NZ
 integer :: initial_count
@@ -145,6 +162,11 @@ logical :: test_case(4)
 
 real(REAL_KIND) :: divide_growth = 2.2
 
+real(REAL_KIND) :: cyclin_threshold
+real(REAL_KIND) :: cell_cycle_duration
+real(REAL_KIND) :: cell_cycle_rate
+real(REAL_KIND) :: cell_cycle_endtime(4)
+
 TYPE(winsockport) :: awp_0, awp_1
 logical :: use_TCP = .true.         ! turned off in para_main()
 logical :: use_CPORT1 = .false.
@@ -165,6 +187,8 @@ integer :: Nbnd
 integer :: seed(2)
 
 real(REAL_KIND), allocatable :: omp_x(:), omp_y(:), omp_z(:)
+
+integer, parameter :: CellML_model = CELLML_WNT_CYCLIN
 
 !DEC$ ATTRIBUTES DLLEXPORT :: nsteps, DELTA_T
 

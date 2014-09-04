@@ -36,32 +36,6 @@ call CellGrowth(dt,ok)
 end subroutine
 
 !-----------------------------------------------------------------------------------------
-! The O2 concentration to use with cell kcell is either the intracellular concentration,
-! or is use_extracellular_O2, the corresponding extracellular concentration
-!-----------------------------------------------------------------------------------------
-subroutine getO2conc(kcell, C_O2)
-integer :: kcell
-real(REAL_KIND) :: C_O2
-integer :: iv, site(3)
-real(REAL_KIND) :: tnow
-
-if (use_extracellular_O2) then
-	iv = cell_list(kcell)%iv
-	if (iv < 1) then
-!		write(logmsg,*) 'getO2conc: ',kcell,site,iv
-!		call logger(logmsg)
-		tnow = istep*DELTA_T
-		C_O2 = BdryConc(OXYGEN,tnow)	! assume that this is a site at the boundary
-	else
-		C_O2 = allstate(iv-1,OXYGEN)
-	endif
-else
-	C_O2 = cell_list(kcell)%conc(OXYGEN)
-endif
-end subroutine
-
-
-!-----------------------------------------------------------------------------------------
 ! Cells move to preferable nearby sites.
 ! For now this is turned off - need to formulate a sensible interpretation of "preferable"
 !-----------------------------------------------------------------------------------------
@@ -117,46 +91,6 @@ real(REAL_KIND) :: C(:)
 
 SiteValue = C(OXYGEN)
 end function
-
-!-----------------------------------------------------------------------------------------
-! Cells can be tagged to die, or finally die of anoxia, or they can be tagged for death 
-! at division time if the drug is effective.
-!-----------------------------------------------------------------------------------------
-subroutine CellDeath(dt,ok)
-real(REAL_KIND) :: dt
-logical :: ok
-integer :: kcell, ict, nlist0, site(3), i, kpar=0 
-real(REAL_KIND) :: C_O2, kmet, Kd, dMdt, pdeath, tnow
-
-!call logger('CellDeath')
-ok = .true.
-tnow = istep*DELTA_T	! seconds
-nlist0 = nlist
-do kcell = 1,nlist
-	if (cell_list(kcell)%state == DEAD) cycle
-!	C_O2 = cell_list(kcell)%conc(OXYGEN)
-	call getO2conc(kcell,C_O2)
-	if (cell_list(kcell)%anoxia_tag) then
-!		write(logmsg,*) 'anoxia_tag: ',kcell,cell_list(kcell)%state,tnow,cell_list(kcell)%t_anoxia_die
-!		call logger(logmsg)
-		if (tnow >= cell_list(kcell)%t_anoxia_die) then
-!			call logger('cell dies')
-			call CellDies(kcell)
-			Nanoxia_dead = Nanoxia_dead + 1
-			cycle
-		endif
-	else
-		if (C_O2 < ANOXIA_THRESHOLD) then
-			cell_list(kcell)%t_hypoxic = cell_list(kcell)%t_hypoxic + dt
-			if (cell_list(kcell)%t_hypoxic > t_anoxic_limit) then
-				cell_list(kcell)%anoxia_tag = .true.						! tagged to die later
-				cell_list(kcell)%t_anoxia_die = tnow + anoxia_death_delay	! time that the cell will die
-				Nanoxia_tag = Nanoxia_tag + 1
-			endif
-		endif
-	endif
-enddo
-end subroutine
 
 !-----------------------------------------------------------------------------------------
 !-----------------------------------------------------------------------------------------
@@ -329,11 +263,42 @@ call CellDivider(kcell,ok)
 end subroutine
 
 !-----------------------------------------------------------------------------------------
+!-----------------------------------------------------------------------------------------
+subroutine UpdateCellCycle(kcell,tcycle)
+integer :: kcell
+real(REAL_KIND) :: tcycle
+integer :: i
+
+if (cell_list(kcell)%cell_cycle_phase == CELL_CYCLE_G0) then
+	if (cell_list(kcell)%cellml_state(58) >= cyclin_threshold) then
+		cell_list(kcell)%cell_cycle_phase = CELL_CYCLE_G1
+	endif
+else
+	do i = 1,4
+		if (tcycle <= cell_cycle_endtime(i)) then
+			cell_list(kcell)%cell_cycle_phase = i
+			if (i == 1) then
+				cell_list(kcell)%volume = 1 + cell_cycle_rate*tcycle
+			elseif (i == 2) then
+				cell_list(kcell)%volume = 1 + cell_cycle_rate*cell_cycle_endtime(1)
+			elseif (i == 3) then
+				cell_list(kcell)%volume = 1 + cell_cycle_rate*(cell_cycle_endtime(1) + tcycle)
+			elseif (i == 4) then
+				cell_list(kcell)%volume = 2
+			endif
+			exit
+		endif
+		cell_list(kcell)%cell_cycle_phase = CELL_CYCLE_D
+	enddo
+endif
+end subroutine
+
+!-----------------------------------------------------------------------------------------
 ! Cell growth, death and division are handled here.  Division occurs when cell volume 
 ! exceeds the divide volume. 
 ! As the cell grows we need to adjust both Cin and Cex to maintain mass conservation.
 !
-! Nazanin's CellML model:
+! Nazanin's CELLML_CELL_CYCLE model:
 ! 0 = time
 ! 1 = growth
 ! 2 = size
@@ -350,7 +315,7 @@ logical :: ok
 integer :: kcell, nlist0, site(3)
 integer :: divide_list(10000), ndivide, i, xmax, xmin, dx
 real(REAL_KIND) :: interval_dt, cellml_dt
-real(REAL_KIND) :: size0, size1, g0, g1, r0, r1
+real(REAL_KIND) :: size0, size1, g0, g1, r0, r1, tcycle
 real(REAL_KIND) :: signal, g_rate, R_max, Hill_Km, Hill_n
 
 real(REAL_KIND) :: tnow, C_O2, metab, dVdt, vol0	!, r_mean, c_rate
@@ -376,90 +341,41 @@ interval_dt = dt/3600.	! Cell_cycle uses time unit = hour
 do kcell = 1,nlist0
 !	write(*,*) 'kcell: ',kcell
 	if (cell_list(kcell)%state == DEAD) cycle
-	g0 = cell_list(kcell)%cellml_state(1)
-	r0 = cell_list(kcell)%cellml_state(5)
-	size0 = cell_list(kcell)%cellml_state(2)
-	dx = xmax - cell_list(kcell)%site(1)
-	signal = signal_max*exp(-signal_decay_coef*dx)	
-	g_rate = 0.12	! 5
-	R_max = 0.1		! 6
-	Hill_Km = 0.33	! 7
-	Hill_n = 3		! 8
-	cell_list(kcell)%cellml_state(4) = signal
-	if (kcell == -5) then
-		write(nfout,'(a,2i6,9f6.2)') 'R: ',istep,kcell,cell_list(kcell)%cellml_state(0:8) 
-		write(*,'(a,2i6,9f6.2)') 'R: ',istep,kcell,cell_list(kcell)%cellml_state(0:8)
+	if (CellML_model == CELLML_CELL_CYCLE) then
+		g0 = cell_list(kcell)%cellml_state(1)
+		r0 = cell_list(kcell)%cellml_state(5)
+		size0 = cell_list(kcell)%cellml_state(2)
+		dx = xmax - cell_list(kcell)%site(1)
+		signal = signal_max*exp(-signal_decay_coef*dx)	
+		cell_list(kcell)%cellml_state(4) = signal
+!		g_rate = 0.12	! 5
+!		R_max = 0.1		! 6
+!		Hill_Km = 0.33	! 7
+!		Hill_n = 3		! 8
+!		if (kcell == -5) then
+!			write(nfout,'(a,2i6,9f6.2)') 'R: ',istep,kcell,cell_list(kcell)%cellml_state(0:8) 
+!			write(*,'(a,2i6,9f6.2)') 'R: ',istep,kcell,cell_list(kcell)%cellml_state(0:8)
+!		endif
+	elseif (CellML_model == CELLML_WNT_CYCLIN) then
+		tcycle = tnow - cell_list(kcell)%cell_cycle_entry_time
+		cell_list(kcell)%cell_cycle_t = tcycle
+		call UpdateCellCycle(kcell,tcycle)
+		dx = xmax - cell_list(kcell)%site(1)
+		signal = signal_max*exp(-signal_decay_coef*dx)	
+		cell_list(kcell)%cellml_state(17) = signal	! Wnt
 	endif
 	call resetIntegrator
 	call setState(cell_list(kcell)%cellml_state)
-!	if (istep == 2) then
-!		call setStateValue(4,signal)
-!		call setStateValue(5,g_rate)
-!		call setStateValue(6,R_max)
-!		call setStateValue(7,Hill_Km)
-!		call setStateValue(8,Hill_n)
-!	endif
 	call multiStep(0.0, interval_dt, cellml_dt);
 	call getState(cell_list(kcell)%cellml_state)
 	if (ReadyToDivide(kcell)) then
 	    ndivide = ndivide + 1
 	    divide_list(ndivide) = kcell
 	endif
-	g1 = cell_list(kcell)%cellml_state(1)
-	r1 = cell_list(kcell)%cellml_state(5)
-	size1 = cell_list(kcell)%cellml_state(2)
-!	if (size0 == size1) then
-!		write(*,'(i6,6f8.4)') kcell, g0, g1, r0, r1, size0, size1
-!	endif
-!	if (size1 > 2.2) then
-!		write(*,'(i6,f8.4)') kcell, size1
-!	endif
-!	if (kcell == 10) then
-!		write(*,'(i6,3f8.4)') kcell,cell_list(10)%cellml_state(1),cell_list(10)%cellml_state(5),cell_list(10)%cellml_state(2)
-!	endif
+!	g1 = cell_list(kcell)%cellml_state(1)
+!	r1 = cell_list(kcell)%cellml_state(5)
+!	size1 = cell_list(kcell)%cellml_state(2)
 enddo
-
-!do kcell = 1,nlist0
-!	if (cell_list(kcell)%state == DEAD) cycle	
-!	C_O2 = cell_list(kcell)%conc(OXYGEN)
-!	metab = O2_metab(C_O2)
-!!	metab = metabolic_rate(OXYGEN,C_O2)
-!	if (use_V_dependence) then
-!		dVdt = cell_list(kcell)%c_rate*cell_list(kcell)%volume*metab
-!	else
-!		dVdt = cell_list(kcell)%r_mean*metab
-!	endif
-!	if (suppress_growth) then	! for checking solvers
-!		dVdt = 0
-!	endif
-!	if (dVdt == 0) stop
-!!	if (istep > 1 .and. dVdt == 0) then
-!!		write(nflog,'(a,2i6,5e12.3)') 'dVdt: ',istep,kcell,r_mean,c_rate,C_O2,metab,dVdt
-!!	endif
-!	site = cell_list(kcell)%site
-!	Cin_0 = cell_list(kcell)%conc
-!	Cex_0 = occupancy(site(1),site(2),site(3))%C
-!	cell_list(kcell)%dVdt = dVdt
-!	Vin_0 = cell_list(kcell)%volume*Vcell_cm3	! cm^3
-!	Vex_0 = Vsite_cm3 - Vin_0					! cm^3
-!	dV = dVdt*dt*Vcell_cm3						! cm^3
-!	cell_list(kcell)%volume = (Vin_0 + dV)/Vcell_cm3
-!	if (vary_conc) then
-!		if (C_option == 1) then
-!			! Calculation based on transfer of an extracellular volume dV with constituents, i.e. holding extracellular concentrations constant
-!			cell_list(kcell)%conc = (Vin_0*Cin_0 + dV*Cex_0)/(Vin_0 + dV)
-!			occupancy(site(1),site(2),site(3))%C = (Vex_0*Cex_0 - dV*Cex_0)/(Vex_0 - dV)
-!		elseif (C_option == 2) then
-!			! Calculation based on change in volumes without mass transfer of constituents
-!			cell_list(kcell)%conc = Vin_0*Cin_0/(Vin_0 + dV)
-!			occupancy(site(1),site(2),site(3))%C = Vex_0*Cex_0/(Vex_0 - dV)
-!		endif
-!	endif	
-!	if (cell_list(kcell)%volume > cell_list(kcell)%divide_volume) then
-!	    ndivide = ndivide + 1
-!	    divide_list(ndivide) = kcell
-!	endif
-!enddo
 
 do i = 1,ndivide
     kcell = divide_list(i)
@@ -476,12 +392,16 @@ end subroutine
 logical function ReadyToDivide(kcell) result(ready)
 integer :: kcell
 
-if (cell_list(kcell)%cellml_state(1) > divide_growth) then
-	ready = .true.
-    ! Here fix the divide_size overshoot.  This needs attention!
-    cell_list(kcell)%cellml_state(2) = 2.0
-else
-	ready = .false.
+if (CellML_model == CELLML_CELL_CYCLE) then
+	if (cell_list(kcell)%cellml_state(1) > divide_growth) then
+		ready = .true.
+		! Here fix the divide_size overshoot.  This needs attention!
+		cell_list(kcell)%cellml_state(2) = 2.0
+	else
+		ready = .false.
+	endif
+elseif (CellML_model == CELLML_WNT_CYCLIN) then
+	ready = (cell_list(kcell)%cell_cycle_phase == CELL_CYCLE_D)
 endif
 end function
 
@@ -516,15 +436,18 @@ cell_list(kcell0)%t_divide_last = tnow
 !write(logmsg,'(a,f6.1)') 'Divide time: ',tnow/3600
 !call logger(logmsg)
 
-! Set kcell0 state to just-divided
-size = cell_list(kcell0)%cellml_state(2)/2
-cell_list(kcell0)%cellml_state(0) = 0		! time
-cell_list(kcell0)%cellml_state(1) = 1		! growth
-cell_list(kcell0)%cellml_state(2) = size	! size
-cell_list(kcell0)%volume = size
-!if (kcell0 == 10) then
-!	write(*,'(a,i6,2f8.4)') 'dividing: ',kcell0,cell_list(kcell0)%cellml_state(1),cell_list(kcell0)%cellml_state(2)
-!endif
+if (CellML_model == CELLML_CELL_CYCLE) then
+	! Set kcell0 state to just-divided
+	size = cell_list(kcell0)%cellml_state(2)/2
+	cell_list(kcell0)%cellml_state(0) = 0		! time
+	cell_list(kcell0)%cellml_state(1) = 1		! growth
+	cell_list(kcell0)%cellml_state(2) = size	! size
+	cell_list(kcell0)%volume = size
+elseif (CellML_model == CELLML_WNT_CYCLIN) then
+	cell_list(kcell0)%cell_cycle_phase = CELL_CYCLE_G0
+	cell_list(kcell0)%volume = 1
+	cell_list(kcell0)%cellml_state = state0
+endif
 
 site0 = cell_list(kcell0)%site
 if (divide_option == DIVIDE_USE_CLEAR_SITE .or. &			! look for the best nearby clear site, if it exists use it
@@ -660,99 +583,6 @@ do j = 1,6
 	endif
 enddo
 if (dbug) call logger('did CellDivider')
-end subroutine
-
-!-----------------------------------------------------------------------------------------
-!-----------------------------------------------------------------------------------------
-subroutine GetPathMass(site0,site01,path,npath,mass)
-integer :: site0(3),site01(3),path(3,200),npath
-real(REAL_KIND) :: mass(:)
-integer :: k, site(3), kcell, ic
-real(REAL_KIND) :: V, C
-
-do ic = 1,MAX_CHEMO
-	mass(ic) = 0
-	if (.not.chemo(ic)%used) cycle
-	C = occupancy(site0(1),site0(2),site0(3))%C(ic)
-	kcell = occupancy(site0(1),site0(2),site0(3))%indx(1)
-	if (kcell > 0) then
-		V = cell_list(kcell)%volume*Vcell_cm3
-	else
-		V = 0
-	endif
-	mass(ic) = mass(ic) + C*(Vsite_cm3 - V)
-	if (npath == 0) then
-		C = occupancy(site01(1),site01(2),site01(3))%C(ic)
-		kcell = occupancy(site01(1),site01(2),site01(3))%indx(1)
-		if (kcell > 0) then
-			V = cell_list(kcell)%volume*Vcell_cm3
-		else
-			V = 0
-		endif
-		mass(ic) = mass(ic) + C*(Vsite_cm3 - V)
-	else
-		do k = 1, npath
-			site = path(:,k)
-			C = occupancy(site01(1),site01(2),site01(3))%C(ic)
-			kcell = occupancy(site(1),site(2),site(3))%indx(1)
-			if (kcell > 0) then
-				V = cell_list(kcell)%volume*Vcell_cm3
-			else
-				V = 0
-			endif
-			mass(ic) = mass(ic) + C*(Vsite_cm3 - V)
-		enddo
-	endif
-enddo
-end subroutine
-
-!-----------------------------------------------------------------------------------------
-!-----------------------------------------------------------------------------------------
-subroutine ScalePathConcentrations(site0,site01,path,npath,alpha)
-integer :: site0(3),site01(3),path(3,200),npath
-real(REAL_KIND) :: alpha(:)
-integer :: k, site(3), kcell, ic
-
-do ic = 1,MAX_CHEMO
-	if (.not.chemo(ic)%used) cycle
-	occupancy(site0(1),site0(2),site0(3))%C(ic) = alpha(ic)*occupancy(site0(1),site0(2),site0(3))%C(ic)
-	if (npath == 0) then
-		occupancy(site01(1),site01(2),site01(3))%C(ic) = alpha(ic)*occupancy(site01(1),site01(2),site01(3))%C(ic)
-	else
-		do k = 1, npath
-			site = path(:,k)
-			occupancy(site01(1),site01(2),site01(3))%C(ic) = alpha(ic)*occupancy(site01(1),site01(2),site01(3))%C(ic)
-		enddo
-	endif
-enddo
-end subroutine
-
-!-----------------------------------------------------------------------------------------
-! The extracellular concentrations along the path are adjusted sequentially, starting from
-! the last-but-one site and working backwards to the first, site01
-!-----------------------------------------------------------------------------------------
-subroutine FixPathConcentrations1(path,npath)
-integer :: path(3,200),npath
-integer :: k, site1(3), site2(3), kcell, ic
-real(REAL_KIND) :: V, Cex(MAX_CHEMO)
-
-do k = npath-1,1,-1
-	site1 = path(:,k)
-	kcell = occupancy(site1(1),site1(2),site1(3))%indx(1)
-	V = cell_list(kcell)%volume*Vcell_cm3
-	Cex = occupancy(site1(1),site1(2),site1(3))%C
-	site2 = path(:,k+1)
-	occupancy(site1(1),site1(2),site1(3))%C = ((Vsite_cm3 - V)*Cex + V*occupancy(site2(1),site2(2),site2(3))%C)/Vsite_cm3
-	do ic = 1,MAX_CHEMO
-		if (.not.chemo(ic)%used) cycle
-		if (occupancy(site1(1),site1(2),site1(3))%C(ic) < 0) then
-			occupancy(site1(1),site1(2),site1(3))%C(ic) = max(occupancy(site2(1),site2(2),site2(3))%C(ic), Cex(ic))
-		endif
-	enddo
-!	write(*,'(i4,4e12.4)') k,Cex(1:2),Vsite_cm3,V
-!	write(*,'(4x,2e12.4)') occupancy(site2(1),site2(2),site2(3))%C(1:2)
-!	write(*,'(4x,2e12.4)') occupancy(site1(1),site1(2),site1(3))%C(1:2)
-enddo
 end subroutine
 
 !-----------------------------------------------------------------------------------------
@@ -1019,20 +849,14 @@ cell_list(kcell1)%celltype = cell_list(kcell0)%celltype
 cell_list(kcell1)%state = cell_list(kcell0)%state
 cell_list(kcell1)%site = site1
 cell_list(kcell1)%ID = cell_list(kcell0)%ID
-!cell_list(kcell1)%anoxia_tag = .false.
 cell_list(kcell1)%exists = .true.
 cell_list(kcell1)%active = .true.
 cell_list(kcell1)%t_divide_last = tnow
-!cell_list(kcell1)%dVdt = cell_list(kcell0)%dVdt
 cell_list(kcell1)%volume = cell_list(kcell0)%volume
-R = par_uni(kpar)
-cell_list(kcell1)%divide_volume = Vdivide0 + dVdivide*(2*R-1)
-!call getGrowthRateParameters(c_rate,r_mean)
-!cell_list(kcell1)%c_rate = c_rate
-!cell_list(kcell1)%r_mean = r_mean
-!cell_list(kcell1)%t_hypoxic = 0
-!cell_list(kcell1)%conc = cell_list(kcell0)%conc
-!cell_list(kcell1)%M = cell_list(kcell0)%M
+if (CellML_model == CELLML_CELL_CYCLE) then
+	R = par_uni(kpar)
+	cell_list(kcell1)%divide_volume = Vdivide0 + dVdivide*(2*R-1)
+endif
 occupancy(site1(1),site1(2),site1(3))%indx(1) = kcell1
 end subroutine
 

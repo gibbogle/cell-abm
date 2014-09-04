@@ -2280,9 +2280,9 @@ padding: 8px
            <widget class="QLineEdit" name="line_SIGNAL_DECAY_COEF">
             <property name="geometry">
              <rect>
-              <x>362</x>
-              <y>500</y>
-              <width>50</width>
+              <x>360</x>
+              <y>560</y>
+              <width>41</width>
               <height>20</height>
              </rect>
             </property>
@@ -2296,14 +2296,91 @@ padding: 8px
            <widget class="QMyLabel" name="label_SIGNAL_DECAY_COEF">
             <property name="geometry">
              <rect>
-              <x>215</x>
-              <y>500</y>
-              <width>141</width>
+              <x>203</x>
+              <y>560</y>
+              <width>151</width>
               <height>20</height>
              </rect>
             </property>
             <property name="text">
              <string>label_SIGNAL_DECAY_COEF</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+            </property>
+           </widget>
+           <widget class="QLineEdit" name="line_SIGNAL_MAX">
+            <property name="geometry">
+             <rect>
+              <x>360</x>
+              <y>530</y>
+              <width>41</width>
+              <height>20</height>
+             </rect>
+            </property>
+            <property name="text">
+             <string>1</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+            </property>
+           </widget>
+           <widget class="QMyLabel" name="label_SIGNAL_MAX">
+            <property name="geometry">
+             <rect>
+              <x>250</x>
+              <y>530</y>
+              <width>101</width>
+              <height>21</height>
+             </rect>
+            </property>
+            <property name="text">
+             <string>label_SIGNAL_MAX</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+            </property>
+           </widget>
+           <widget class="QLineEdit" name="line_CELL_CYCLE_TIME">
+            <property name="geometry">
+             <rect>
+              <x>360</x>
+              <y>500</y>
+              <width>41</width>
+              <height>20</height>
+             </rect>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+            </property>
+           </widget>
+           <widget class="QMyLabel" name="label_CELL_CYCLE_TIME">
+            <property name="geometry">
+             <rect>
+              <x>240</x>
+              <y>500</y>
+              <width>111</width>
+              <height>21</height>
+             </rect>
+            </property>
+            <property name="text">
+             <string>label_CELL_CYCLE_TIME</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+            </property>
+           </widget>
+           <widget class="QLabel" name="label_hrs">
+            <property name="geometry">
+             <rect>
+              <x>410</x>
+              <y>500</y>
+              <width>31</width>
+              <height>21</height>
+             </rect>
+            </property>
+            <property name="text">
+             <string>hours</string>
             </property>
            </widget>
           </widget>
