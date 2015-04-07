@@ -329,7 +329,7 @@ void MainWindow::createLists()
 //--------------------------------------------------------------------------------------------------------
 void MainWindow:: setupCellML()
 {
-    char namestr[128];
+    char compname[128], varname[128];
     QRect rect;
     COMPONENT *component;
     int icomp, ivar, nvars;
@@ -353,46 +353,62 @@ void MainWindow:: setupCellML()
         }
         component_list.clear();
     }
-
+    LOG_MSG("Loaded CellML file");
     int w = 170;
+    int nrows = 24;
+    int column = 0;
     for (int icomp=0; icomp < min(ncomponents,10); icomp++) {
-        QString compstr = QString::number(icomp);
-        component = new COMPONENT;
-        CellML_get_component_info(icomp,namestr,&nvars);
-        LOG_MSG(namestr);
-        strcpy(component->name,namestr);
-        component->nvars = nvars;
-        component->label_list = new QLabel*[component->nvars];
-        component->line_list = new QLineEdit*[component->nvars];
-        component->gbox = new QGroupBox;
-        component->gbox->setParent(tab_CellML);
-        component->gbox->setTitle(component->name);
-        QFormLayout *form = new QFormLayout;
-        component->gbox->setLayout(form);
-        rect.setX((w+10)*icomp + 10);
-        rect.setY(30);
-        rect.setHeight(nvars*26 + 30);
-        rect.setWidth(w);
-        component->gbox->setGeometry(rect);
-        component_list.append(component);
-        for (ivar=0; ivar<nvars; ivar++) {
-            QString varstr = QString::number(ivar);
-            QString fullname = "lineEdit_CellML_" + compstr + "_" + varstr;
-            component->label_list[ivar] = new QLabel;
-            line = new QLineEdit;
-            line->setObjectName(fullname);
-            component->line_list[ivar] = line;
-            connect(line, SIGNAL(textChanged(QString)), this, SLOT(cellmlParameterChanged()));
-            component->line_list[ivar]->setMaximumWidth(100);
-            CellML_get_variable_name(icomp,ivar,namestr);
-            component->label_list[ivar]->setText(namestr);
-            double val;
-            CellML_get_variable_value(icomp,ivar,&val);
-            component->line_list[ivar]->setText(QString::number(val,'f',3));
-            form->addRow(component->label_list[ivar],component->line_list[ivar]);
-            component->line_list[ivar]->setAlignment(Qt::AlignRight);
+        CellML_get_component_info(icomp,compname,&nvars);
+        LOG_MSG(compname);
+        int ncols = (nvars-1)/nrows + 1;
+        for (int icol=0; icol<ncols; icol++) {
+            int ivar1 = icol*nrows;
+            int ivar2 = MIN(ivar1+nrows,nvars) - 1;
+            QString compstr = QString::number(icomp);
+            component = new COMPONENT;
+            strcpy(component->name,compname);
+    //        component->nvars = nvars;
+            component->icomp = icomp;
+            component->nvars = ivar2-ivar1+1;
+            component->label_list = new QLabel*[component->nvars];
+            component->line_list = new QLineEdit*[component->nvars];
+            component->gbox = new QGroupBox;
+            component->gbox->setParent(tab_CellML);
+            component->gbox->setTitle(component->name);
+            QFormLayout *form = new QFormLayout;
+            component->gbox->setLayout(form);
+    //        rect.setX((w+10)*icomp + 10);
+            rect.setX((w+10)*column + 10);
+            rect.setY(30);
+    //        rect.setHeight(nvars*26 + 30);
+            rect.setHeight(26*MIN(component->nvars,nrows) + 30);
+            rect.setWidth(w);
+            component->gbox->setGeometry(rect);
+            column++;
+            component_list.append(component);
+    //        for (ivar=0; ivar<nvars; ivar++) {
+            for (int ivcomp=0; ivcomp<component->nvars; ivcomp++) {
+                ivar = icol*nrows + ivcomp;
+                QString varstr = QString::number(ivar);
+                QString fullname = "lineEdit_CellML_" + compstr + "_" + varstr;
+                component->label_list[ivcomp] = new QLabel;
+                line = new QLineEdit;
+                line->setObjectName(fullname);
+                component->line_list[ivcomp] = line;
+                connect(line, SIGNAL(textChanged(QString)), this, SLOT(cellmlParameterChanged()));  // this means that a signal is sent every time this line is changed
+                component->line_list[ivcomp]->setMaximumWidth(100);
+                CellML_get_variable_name(icomp,ivar,varname);
+                component->label_list[ivcomp]->setText(varname);
+                double val;
+                CellML_get_variable_value(icomp,ivar,&val);
+                component->line_list[ivcomp]->setText(QString::number(val,'g',6));
+                form->addRow(component->label_list[ivcomp],component->line_list[ivcomp]);
+                component->line_list[ivcomp]->setAlignment(Qt::AlignRight);
+            }
         }
     }
+    sprintf(msg,"setupCellml: component_list.size: %d",component_list.size());
+    LOG_MSG(msg);
     cellML_loaded = true;
 /*
     ncomponents = 2;
@@ -1805,7 +1821,8 @@ void MainWindow::preConnection()
     initializeGraphs(newR);
     LOG_MSG("did initializeGraphs");
     posdata = false;
-	LOG_MSG("preconnection: done");
+    setCellmlParameters();
+    LOG_MSG("preconnection: done");
 }
 
 //--------------------------------------------------------------------------------------------------------
@@ -1941,7 +1958,7 @@ void MainWindow::displayScene()
 }
 
 //--------------------------------------------------------------------------------------------------------
-// Currently summaryData[] holds istep,ntot,nborn.  Hourly intervals, i.e. every 240 timesteps
+// Currently summaryData[] holds istep,ntot,nborn.  Hourly intervals
 //--------------------------------------------------------------------------------------------------------
 void MainWindow::showSummary(int hr)
 {
@@ -3380,60 +3397,45 @@ void MainWindow::setupCellColours()
     int i, k;
 
 //    QStringList names = QColor::colorNames();
-    for (i=0; i<2; i++) {
+    for (i=0; i<=4; i++) {
         if (i == 0)
+            combo = comboBox_CELLCOLOUR_0;
+        else if (i == 1)
             combo = comboBox_CELLCOLOUR_1;
-        else
+        else if (i == 2)
             combo = comboBox_CELLCOLOUR_2;
+        else if (i == 3)
+            combo = comboBox_CELLCOLOUR_3;
+        else if (i == 4)
+            combo = comboBox_CELLCOLOUR_4;
         k = 0;
-        combo->addItem("green");
+        combo->addItem("green");    // 0
         comboColour[k] = QColor(Qt::green);
         k++;
-        combo->addItem("red");
+        combo->addItem("red");      // 1
         comboColour[k] = QColor(Qt::red);
         k++;
-        combo->addItem("yellow");
+        combo->addItem("yellow");   // 2
         comboColour[k] = QColor(Qt::yellow);
         k++;
-        combo->addItem("orange");
+        combo->addItem("orange");   // 3
         comboColour[k] = QColor(255,130,0);
         k++;
-        combo->addItem("blue");
+        combo->addItem("blue");     // 4
         comboColour[k] = QColor(Qt::blue);
         k++;
-        combo->addItem("magenta");
+        combo->addItem("magenta");  // 5
         comboColour[k] = QColor(Qt::magenta);
         k++;
-        combo->addItem("cyan");
+        combo->addItem("cyan");     // 6
         comboColour[k] = QColor(Qt::cyan);
         k++;
-
-//        combo->addItem("red");
-//        combo->addItem("orange");
-//        combo->addItem("yellow");
-//        combo->addItem("green");
-//        combo->addItem("blue");
-//        combo->addItem("purple");
-//        combo->addItem("brown");
     }
-//    QString colstr = "red";
-//    comboBox_CELLCOLOUR_1->addItem(colstr);
-//    comboBox_CELLCOLOUR_1->addItem("orange");
-//    comboBox_CELLCOLOUR_1->addItem("yellow");
-//    comboBox_CELLCOLOUR_1->addItem("green");
-//    comboBox_CELLCOLOUR_1->addItem("blue");
-//    comboBox_CELLCOLOUR_1->addItem("purple");
-//    comboBox_CELLCOLOUR_1->addItem("brown");
-//    comboBox_CELLCOLOUR_2->addItem("red");
-//    comboBox_CELLCOLOUR_2->addItem("orange");
-//    comboBox_CELLCOLOUR_2->addItem("yellow");
-//    comboBox_CELLCOLOUR_2->addItem("green");
-//    comboBox_CELLCOLOUR_2->addItem("blue");
-//    comboBox_CELLCOLOUR_2->addItem("purple");
-//    comboBox_CELLCOLOUR_2->addItem("brown");
-    comboBox_CELLCOLOUR_1->setCurrentIndex(1);
+    comboBox_CELLCOLOUR_0->setCurrentIndex(6);
     comboBox_CELLCOLOUR_1->setCurrentIndex(0);
-    comboBox_CELLCOLOUR_2->setCurrentIndex(1);
+    comboBox_CELLCOLOUR_2->setCurrentIndex(2);
+    comboBox_CELLCOLOUR_3->setCurrentIndex(3);
+    comboBox_CELLCOLOUR_4->setCurrentIndex(1);
 }
 
 //--------------------------------------------------------------------------------------------------------
@@ -3524,6 +3526,15 @@ void MainWindow::on_cbox_USE_DRUG_A_toggled(bool checked)
 
 //-----------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------
+void MainWindow::on_checkBox_CELLDISPLAY_0_toggled(bool display)
+{
+    vtk->display_celltype[0] = display;
+    vtk->renderCells(false,false);
+}
+
+
+//-----------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------
 void MainWindow::on_checkBox_CELLDISPLAY_1_toggled(bool display)
 {
     vtk->display_celltype[1] = display;
@@ -3542,15 +3553,37 @@ void MainWindow::on_checkBox_CELLDISPLAY_2_toggled(bool display)
 
 //-----------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------
+void MainWindow::on_checkBox_CELLDISPLAY_3_toggled(bool display)
+{
+    vtk->display_celltype[3] = display;
+    vtk->renderCells(false,false);
+}
+
+//-----------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------
+void MainWindow::on_checkBox_CELLDISPLAY_4_toggled(bool display)
+{
+    vtk->display_celltype[4] = display;
+    vtk->renderCells(false,false);
+}
+
+//-----------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------
+void MainWindow::on_comboBox_CELLCOLOUR_0_currentIndexChanged(int index)
+{
+    vtk->celltype_colour[0] = comboColour[index];
+    vtk->renderCells(false,false);
+}
+
+//-----------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------
 void MainWindow::on_comboBox_CELLCOLOUR_1_currentIndexChanged(int index)
 {
-    QColor qcolor;
 //    vtk->celltype_colour[1] = comboBox_CELLCOLOUR_1->currentText();
-    qcolor = comboColour[index];
-    vtk->celltype_colour[1] = qcolor;
+    vtk->celltype_colour[1] = comboColour[index];
     vtk->renderCells(false,false);
-    sprintf(msg,"changed celltype_colour[1]: index: %d r,g,b: %d %d %d",index,qcolor.red(),qcolor.green(),qcolor.blue());
-    LOG_MSG(msg);
+//    sprintf(msg,"changed celltype_colour[1]: index: %d r,g,b: %d %d %d",index,qcolor.red(),qcolor.green(),qcolor.blue());
+//    LOG_MSG(msg);
 }
 
 //-----------------------------------------------------------------------------------------
@@ -3559,6 +3592,22 @@ void MainWindow::on_comboBox_CELLCOLOUR_2_currentIndexChanged(int index)
 {
 //    vtk->celltype_colour[2] = comboBox_CELLCOLOUR_2->currentText();
     vtk->celltype_colour[2] = comboColour[index];
+    vtk->renderCells(false,false);
+}
+
+//-----------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------
+void MainWindow::on_comboBox_CELLCOLOUR_3_currentIndexChanged(int index)
+{
+    vtk->celltype_colour[3] = comboColour[index];
+    vtk->renderCells(false,false);
+}
+
+//-----------------------------------------------------------------------------------------
+//-----------------------------------------------------------------------------------------
+void MainWindow::on_comboBox_CELLCOLOUR_4_currentIndexChanged(int index)
+{
+    vtk->celltype_colour[4] = comboColour[index];
     vtk->renderCells(false,false);
 }
 
@@ -3967,8 +4016,18 @@ void MainWindow::on_pushButtonLoadCellMLFile_clicked()
     setupCellML();
 }
 
+//---------------------------------------------------------------------------------------
+// When a CellML parameter (or variable) value is changed on the CellML screen, the
+// changed value is transmitted to the CellML solver, modifying the default initial value.
+// This value will later be read as state0 by the AB simulator.
+//
+// This is now redundant.  It was not safe, because a previous run could change values
+// of state variables in the CellML solver.
+// It is superceded by setCellmlParameters().
+//---------------------------------------------------------------------------------------
 void MainWindow::cellmlParameterChanged()
 {
+    return;
     QObject *w = sender();
     LOG_QMSG("CellML parameter changed: " + w->objectName());
     QStringList stringList= w->objectName().split("_",QString::SkipEmptyParts);
@@ -3979,4 +4038,28 @@ void MainWindow::cellmlParameterChanged()
     sprintf(msg,"%d %d %f",icomp,ivar,val);
     LOG_MSG(msg);
     CellML_set_variable_value(icomp,ivar,val);
+}
+
+//---------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------
+void MainWindow::setCellmlParameters()
+{
+    COMPONENT *component;
+    QLineEdit *lineEdit;
+    LOG_MSG("setCellmlParameters");
+    int icomp;
+    int ivar = 0;
+    for (int ic=0; ic < component_list.size(); ic++) {
+        component = component_list[ic];
+        icomp = component->icomp;
+        int nvars = component->nvars;
+        for (int iv=0; iv<nvars; iv++) {
+            lineEdit = component->line_list[iv];
+            double val = lineEdit->text().toDouble();
+//            sprintf(msg,"%d %d %f",icomp,ivar,val);
+//            LOG_MSG(msg);
+            CellML_set_variable_value(icomp,ivar,val);
+            ivar++;
+        }
+    }
 }

@@ -18,7 +18,7 @@ outside_xyz = .true.
 if (x < 1 .or. x > NX) return
 if (y < 1 .or. y > NY) return
 if (z < 1 .or. z > NZ) return
-if (y <= ywall) return
+if (y <= ysurface) return
 outside_xyz = .false.
 end function
 
@@ -34,7 +34,7 @@ x = site(1)
 y = site(2)
 z = site(3)
 !if (occupancy(x,y,z)%indx(1) == OUTSIDE_TAG) then	! outside
-if (occupancy(x,y,z)%indx(1) <= 0) then	! outside or vacant
+if (occupancy(x,y,z)%indx(1) <= 0) then	! outside, inaccessible or vacant
     isbdry = .false.
     return
 endif
@@ -425,6 +425,7 @@ integer :: j, jmin, site(3), indx
 real(REAL_KIND) :: r, rmin
 
 rmin = 1.0e10
+jmin = 0
 do j = 1,27
 	if (j == 14) cycle
 !	site = site1 + neumann(:,j)
@@ -439,6 +440,11 @@ do j = 1,27
 		endif
 	endif
 enddo
+if (jmin == 0) then
+	write(logmsg,*) 'Error: getoutsidesite: no outside or vacant site near: ',site1
+	call logger(logmsg)
+	stop
+endif
 !site2 = site1 + neumann(:,jmin)
 site2 = site1 + jumpvec(:,jmin)
 end subroutine

@@ -62,6 +62,7 @@ public:
 
 struct component_struct {
     char name[128];
+    int icomp;
     int nvars;
     QLabel **label_list;
     QLineEdit ** line_list;
@@ -122,10 +123,16 @@ private slots:
     void onSelectConstituent();
 
     void on_verticalSliderTransparency_sliderMoved(int position);
+    void on_checkBox_CELLDISPLAY_0_toggled(bool display);
     void on_checkBox_CELLDISPLAY_1_toggled(bool display);
     void on_checkBox_CELLDISPLAY_2_toggled(bool display);
+    void on_checkBox_CELLDISPLAY_3_toggled(bool display);
+    void on_checkBox_CELLDISPLAY_4_toggled(bool display);
+    void on_comboBox_CELLCOLOUR_0_currentIndexChanged(int index);
     void on_comboBox_CELLCOLOUR_1_currentIndexChanged(int index);
     void on_comboBox_CELLCOLOUR_2_currentIndexChanged(int index);
+    void on_comboBox_CELLCOLOUR_3_currentIndexChanged(int index);
+    void on_comboBox_CELLCOLOUR_4_currentIndexChanged(int index);
 
     void on_pushButtonGetCellMLFile_clicked();
     void on_pushButtonLoadCellMLFile_clicked();
@@ -207,6 +214,7 @@ private:
 	QString parse_rbutton(QString wtag, int *rbutton_case);
 	void setBdryRadioButton(QRadioButton *w_rb, int val);
 	void setLineEditVisibility(QString wname, int val);
+    void setCellmlParameters();
 
 	PARAM_SET get_param(int);
 

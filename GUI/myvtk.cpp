@@ -519,6 +519,7 @@ void MyVTK::process_Tcells()
     ACTOR_TYPE a;
     ACTOR_TYPE *ap;
     QColor qcolor, colour1, colour2;
+    bool display;
 
  //   LOG_QMSG("process_Tcells");
     int np = TCpos_list.length();
@@ -556,11 +557,45 @@ void MyVTK::process_Tcells()
     for (i=0; i<np; i++) {
         cp = TCpos_list[i];
         tag = cp.tag;
-//        if (USE_CELLTYPE_COLOUR) {
-//            if (!display_celltype[cp.state]) {
-//                continue;
-//            }
-//        }
+        growth = cp.state/100.;
+        display = true;
+        // Wnt_Cyclin
+        int itype;
+        if (growth == 0) {          // G0
+            r = 0.5;
+            g = 0.5;
+            b = 0;
+            itype = 0;
+        } else if (growth < 0.4) {         // G1
+            r = 1;
+            g = 1;
+            b = 0;
+            itype = 1;
+        } else if (growth < 0.6) {  // S
+            r = 1;
+            g = 0.5;
+            b = 0;
+            itype = 2;
+        } else if (growth < 0.9) {  // G2
+            r = 1;
+            g = 0.5;
+            b = 0;
+            itype = 3;
+        } else {                    // M
+            r = 1;
+            g = 0.5;
+            b = 0;
+            itype = 4;
+        }
+        if (USE_CELLTYPE_COLOUR) {
+            qcolor = celltype_colour[itype];
+            r = qcolor.red()/255.;
+            g = qcolor.green()/255.;
+            b = qcolor.blue()/255.;
+            display = display_celltype[itype];
+        }
+        if (!display) continue;
+
         in_pos_list[tag] = true;
         if (dbug) {
             sprintf(msg,"i: %d tag: %d",i,tag);
@@ -586,7 +621,9 @@ void MyVTK::process_Tcells()
 //            unpack(cp.state, &r, &g, &b);
 //        }
 
-        growth = cp.state/100.;
+
+        /*
+        // Cell_cycle
         if (growth < 1.51) {        // G1
             r = 0;
             g = 1;
@@ -608,7 +645,32 @@ void MyVTK::process_Tcells()
             b = 0;
             qcolor = colour2;
         }
-        qcolor.getRgbF(&r,&g,&b,&h);
+
+
+        // Wnt_Cyclin
+        if (growth < 0.4) {         // G1
+            r = 1;
+            g = 1;
+            b = 0;
+        } else {                    // S, G2, M
+            r = 1;
+            g = 0.5;
+            b = 0;
+//        } else if (growth < 0.6) {  // S
+//            r = 1;
+//            g = 0.5;
+//            b = 0;
+//        } else if (growth < 0.9) {  // G2
+//            r = 1;
+//            g = 0.5;
+//            b = 0;
+//        } else {                    // M
+//            r = 1;
+//            g = 0.5;
+//            b = 0;
+        }
+        */
+
         ap->actor->GetProperty()->SetColor(r, g, b);
         ap->actor->SetScale(cp.diameter);
 //        if (cp.highlight == 0)

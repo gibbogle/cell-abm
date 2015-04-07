@@ -155,7 +155,7 @@ void ExecThread::run()
 	execute(&ncpu,const_cast<char *>(infile),&len_infile,const_cast<char *>(outfile),&len_outfile);
     get_dimensions(&NX,&NY,&NZ,&nsteps,&DELTA_T, &MAX_CHEMO, cused, &dfraction);
     emit setupC(MAX_CHEMO, cused);
-    nsumm_interval = (60*60)/DELTA_T;   // number of time steps per hour
+    nsumm_interval = (60)/DELTA_T;   // number of time steps per hour
 //	sprintf(msg,"exthread: nsteps: %d",nsteps);
 //	LOG_MSG(msg);
 
@@ -201,9 +201,9 @@ void ExecThread::run()
 //            conc_nc = 0;
 //            vol_nv = 0;
 //            oxy_nv = 0;
-            get_concdata(&conc_nc, &conc_dx, concData);
-            get_volprob(&vol_nv, &vol_v0, &vol_dv, volProb);
-            get_oxyprob(&oxy_nv, &oxy_dv, oxyProb);
+//            get_concdata(&conc_nc, &conc_dx, concData);
+//            get_volprob(&vol_nv, &vol_v0, &vol_dv, volProb);
+//            get_oxyprob(&oxy_nv, &oxy_dv, oxyProb);
             mutex1.unlock();
             hour++;
             emit summary(hour);		// Emit signal to update summary plots, at hourly intervals

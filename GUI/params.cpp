@@ -21,7 +21,11 @@ The shape value must be greater than 1, and values close to 1 give distributions
 "Lattice size",
 "Dimension of the lattice (number of sites in X,Y and Z directions).  Typically 5*BLOB_RADIUS is OK."},
 
-{"INITIAL_COUNT", 1000, 0, 0,
+{"USE_SURFACE",0,0,1,
+ "Use surface",
+ "If selected the cells will grow on a surface"},
+
+{"INITIAL_COUNT", 100, 0, 0,
 "Initial number of cells",
 "Initial number of cells"},
 
@@ -47,7 +51,7 @@ The shape value must be greater than 1, and values close to 1 give distributions
 "Length of the simulation.\n\
 [days]"},
 
-{"DELTA_T", 600, 0, 0,
+{"DELTA_T", 1, 0, 0,
 "Time step",
 "Length of main time step, for cell death, division, etc.  Should be a divisor of 3600. \n\
 [mins]"},
@@ -135,7 +139,7 @@ The shape value must be greater than 1, and values close to 1 give distributions
 //"Display cell type 2",
 //"Display cell type 2"},
 
-{"NT_ANIMATION", 1, 0, 0,
+{"NT_ANIMATION", 20, 0, 0,
  "Animation interval (timesteps)",
  "Interval between animation screen updates (timesteps).  One timestep = 15 sec."},
 
@@ -294,6 +298,10 @@ The shape value must be greater than 1, and values close to 1 give distributions
 "Signal decay coefficient",
 "Signal strength is maxmum at the right side of the blob (max x), and decays with distance d in the negative x direction by: \n\
  S = Smax.exp(-Kdecay*d) where d is the number of grids"},
+
+{"CYCLIN_THRESHOLD", 0.04,0,0,
+ "Cyclin threshold for division",
+ "A cell enters cell cycle when the cyclin-D level reaches this threshold"},
 
 {"CELLML_FILE", 0, 0, 0,
 "",

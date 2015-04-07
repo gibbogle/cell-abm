@@ -41,6 +41,7 @@ integer, parameter :: EXTRA = 1
 integer, parameter :: INTRA = 2
 integer, parameter :: MAX_CELLTYPES = 4
 integer, parameter :: max_nlist = 500000
+integer, parameter :: MAX_SIMULATORS = 32
 
 logical, parameter :: use_ODE_diffusion = .true.
 logical, parameter :: compute_concentrations = .true.
@@ -83,9 +84,6 @@ type cell_type
 	integer :: iv
 	logical :: active
 	integer :: state
-	integer :: cell_cycle_phase
-	real(REAL_KIND) :: cell_cycle_entry_time
-	real(REAL_KIND) :: cell_cycle_t
 	logical :: divide_flag
 	real(REAL_KIND) :: conc(MAX_CHEMO)
 	real(REAL_KIND) :: dVdt
@@ -98,7 +96,12 @@ type cell_type
 	real(REAL_KIND) :: M
 	logical :: anoxia_tag
 	logical :: exists
+	integer :: ksim
 	real(REAL_KIND), allocatable :: cellml_state(:)
+	! WNT_CYCLIN
+	integer :: cell_cycle_phase
+	real(REAL_KIND) :: cell_cycle_entry_time
+	real(REAL_KIND) :: cell_cycle_t
 end type
 
 type boundary_type
@@ -122,14 +125,15 @@ end type
 type(dist_type) :: divide_dist
 type(occupancy_type), allocatable :: occupancy(:,:,:)
 type(cell_type), allocatable :: cell_list(:)
-real(REAL_KIND),allocatable :: state0(:)
+real(REAL_KIND),allocatable :: cellml_state0(:)
 
 integer :: NX, NY, NZ
 integer :: initial_count
 integer, allocatable :: zdomain(:),zoffset(:)
 integer :: blobrange(3,2)
 real(REAL_KIND) :: x0,y0,z0   ! centre in global coordinates (units = grids)
-integer :: ywall
+logical :: use_surface
+integer :: ysurface
 real(REAL_KIND) :: Radius, Centre(3)
 real(REAL_KIND) :: adrop, bdrop, cdrop	! drop shape transformation parameters
 real(REAL_KIND) :: z0drop				! drop centre is at z0drop = zmin + (bdrop-cdrop)*R

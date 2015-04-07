@@ -5,7 +5,7 @@ use global
 use boundary
 use chemokine
 use ode_diffuse
-use csim_abm
+use csim_abm_mp
 implicit none
 
 !real(REAL_KIND), parameter :: Vdivide0 = 1.6
@@ -20,19 +20,121 @@ contains
 !-----------------------------------------------------------------------------------------
 subroutine GrowCells(dt,ok)
 real(REAL_KIND) :: dt
+logical :: ok, pok
+integer :: kcell, nlist0, xmin, xmax
+integer :: k1, k2, ns
+logical :: done
+logical :: use_parallel = .true.
+
+if (.not.use_parallel) then
+	ok = .true.
+	call CellGrowth(dt,ok)
+else
+	xmax = 0
+	xmin = 9999
+	do kcell = 1,nlist
+		xmax = max(xmax,cell_list(kcell)%site(1))
+		xmin = min(xmin,cell_list(kcell)%site(1))
+	enddo
+	ok = .true.
+	done = .false.
+	k1 = 0
+	k2 = 0
+	do 
+		k1 = k2+1
+		if (nlist - k2 > MAX_SIMULATORS) then
+			ns = MAX_SIMULATORS - 1
+		else
+			ns = nlist - k1
+			done = .true.
+		endif
+		k2 = k1 + ns
+!		write(*,*) 'k1,k2: ',k1,k2
+!$omp parallel do private(pok) !default(shared) schedule(static)
+		do kcell = k1,k2
+			if (cell_list(kcell)%state == DEAD) cycle
+			call ParCellGrowth(kcell,dt,xmin,xmax,pok)
+			if (.not.pok) then
+				ok = .false.
+			endif
+		enddo
+!$omp end parallel do
+		if (.not.ok) return
+		if (done) exit
+	enddo
+	
+	nlist0 = nlist
+	do kcell = 1,nlist0
+		if (ReadyToDivide(kcell)) then
+			kcell_dividing = kcell
+			call CellDivider(kcell, ok)
+			if (.not.ok) return
+		endif
+	enddo
+endif
+end subroutine
+
+!-----------------------------------------------------------------------------------------
+!-----------------------------------------------------------------------------------------
+subroutine ParCellGrowth(kcell,dt,xmin,xmax,ok)
+integer :: kcell, xmin, xmax
+real(REAL_KIND) :: dt
 logical :: ok
+!integer :: kcell, nlist0, site(3)
+!integer :: divide_list(10000), ndivide, i, xmax, xmin, dx
+integer :: site(3), dx
+real(REAL_KIND) :: interval_dt, cellml_dt
+real(REAL_KIND) :: size0, size1, g0, g1, r0, r1, tcycle
+real(REAL_KIND) :: signal, g_rate, R_max, Hill_Km, Hill_n
+
+real(REAL_KIND) :: tnow, C_O2, metab, dVdt, vol0	!, r_mean, c_rate
+real(REAL_KIND) :: Vin_0, Vex_0, dV
+real(REAL_KIND) :: Cin_0(MAX_CHEMO), Cex_0(MAX_CHEMO)
+character*(20) :: msg
+integer :: ksim
+logical :: do_solve
+logical :: C_option = 1
 
 ok = .true.
-call CellGrowth(dt,ok)
-!if (.not.ok) return
-!if (use_death) then
-!	call CellDeath(dt,ok)
-!	if (.not.ok) return
-!endif
-!if (use_migration) then
-!	call CellMigration(ok)
-!	if (.not.ok) return
-!endif
+tnow = istep*DELTA_T
+
+if (CellML_model == CELLML_CELL_CYCLE) then
+	g0 = cell_list(kcell)%cellml_state(1)
+	r0 = cell_list(kcell)%cellml_state(5)
+	size0 = cell_list(kcell)%cellml_state(2)
+	dx = xmax - cell_list(kcell)%site(1)
+	signal = signal_max*exp(-signal_decay_coef*dx)	
+	cell_list(kcell)%cellml_state(4) = signal
+	cellml_dt = 0.05
+	interval_dt = dt/3600.	! Cell_cycle uses time unit = hour
+	do_solve = .true.
+!		g_rate = 0.12	! 5
+!		R_max = 0.1		! 6
+!		Hill_Km = 0.33	! 7
+!		Hill_n = 3		! 8
+!		if (kcell == -5) then
+!			write(nfout,'(a,2i6,9f6.2)') 'R: ',istep,kcell,cell_list(kcell)%cellml_state(0:8) 
+!			write(*,'(a,2i6,9f6.2)') 'R: ',istep,kcell,cell_list(kcell)%cellml_state(0:8)
+!		endif
+elseif (CellML_model == CELLML_WNT_CYCLIN) then
+	tcycle = tnow - cell_list(kcell)%cell_cycle_entry_time
+	cell_list(kcell)%cell_cycle_t = tcycle
+	call UpdateCellCycle(kcell,tcycle)
+	dx = xmax - cell_list(kcell)%site(1)
+	signal = signal_max*exp(-signal_decay_coef*dx)	
+	cell_list(kcell)%cellml_state(17) = signal	! Wnt
+	cellml_dt = 0.1
+	interval_dt = dt	! Wnt_Cyclin uses time unit = min
+	do_solve = (cell_list(kcell)%cell_cycle_phase == CELL_CYCLE_G0)
+endif
+if (do_solve) then
+	ksim = cell_list(kcell)%ksim
+!	write(*,*) 'kcell, ksim: ',kcell,ksim
+	call resetIntegrator(ksim)
+	call setState(ksim,cell_list(kcell)%cellml_state)
+	call multiStep(ksim,0.0, interval_dt, cellml_dt);
+	call getState(ksim,cell_list(kcell)%cellml_state)
+endif
 end subroutine
 
 !-----------------------------------------------------------------------------------------
@@ -267,11 +369,20 @@ end subroutine
 subroutine UpdateCellCycle(kcell,tcycle)
 integer :: kcell
 real(REAL_KIND) :: tcycle
+real(REAL_KIND) :: cyclinD, tnow
 integer :: i
 
+tnow = istep*DELTA_T
+!if (kcell == 1) write(*,*) 'UpdateCellCycle: ',kcell,cell_list(kcell)%cell_cycle_phase,tcycle 
 if (cell_list(kcell)%cell_cycle_phase == CELL_CYCLE_G0) then
-	if (cell_list(kcell)%cellml_state(58) >= cyclin_threshold) then
+	cyclinD = cell_list(kcell)%cellml_state(58)
+	if (cyclinD >= cyclin_threshold) then
 		cell_list(kcell)%cell_cycle_phase = CELL_CYCLE_G1
+		cell_list(kcell)%cell_cycle_entry_time = tnow
+		cell_list(kcell)%cell_cycle_t = 0
+!		if (kcell == 1) then
+!			write(nflog,*) 'G0->G1: istep, kcell, cyclinD :',istep,kcell,cyclinD
+!		endif
 	endif
 else
 	do i = 1,4
@@ -279,17 +390,24 @@ else
 			cell_list(kcell)%cell_cycle_phase = i
 			if (i == 1) then
 				cell_list(kcell)%volume = 1 + cell_cycle_rate*tcycle
+				exit
 			elseif (i == 2) then
 				cell_list(kcell)%volume = 1 + cell_cycle_rate*cell_cycle_endtime(1)
+				exit
 			elseif (i == 3) then
-				cell_list(kcell)%volume = 1 + cell_cycle_rate*(cell_cycle_endtime(1) + tcycle)
+				cell_list(kcell)%volume = 1 + cell_cycle_rate*(cell_cycle_endtime(1) + tcycle - cell_cycle_endtime(2))
+				exit
 			elseif (i == 4) then
 				cell_list(kcell)%volume = 2
+				exit
 			endif
-			exit
 		endif
 		cell_list(kcell)%cell_cycle_phase = CELL_CYCLE_D
+!		if (kcell == 1) then
+!			write(nflog,*) 'M->G0: istep, kcell, cyclinD :',istep,kcell,cyclinD
+!		endif
 	enddo
+!	if (kcell == 1) write(*,*) 'UpdateCellCycle: ',kcell,i,tcycle,cell_cycle_endtime(i)
 endif
 end subroutine
 
@@ -322,6 +440,8 @@ real(REAL_KIND) :: tnow, C_O2, metab, dVdt, vol0	!, r_mean, c_rate
 real(REAL_KIND) :: Vin_0, Vex_0, dV
 real(REAL_KIND) :: Cin_0(MAX_CHEMO), Cex_0(MAX_CHEMO)
 character*(20) :: msg
+integer :: ksim
+logical :: do_solve
 logical :: C_option = 1
 
 ok = .true.
@@ -336,10 +456,7 @@ do kcell = 1,nlist0
 	xmin = min(xmin,cell_list(kcell)%site(1))
 enddo
 
-cellml_dt = 0.05
-interval_dt = dt/3600.	! Cell_cycle uses time unit = hour
 do kcell = 1,nlist0
-!	write(*,*) 'kcell: ',kcell
 	if (cell_list(kcell)%state == DEAD) cycle
 	if (CellML_model == CELLML_CELL_CYCLE) then
 		g0 = cell_list(kcell)%cellml_state(1)
@@ -348,6 +465,9 @@ do kcell = 1,nlist0
 		dx = xmax - cell_list(kcell)%site(1)
 		signal = signal_max*exp(-signal_decay_coef*dx)	
 		cell_list(kcell)%cellml_state(4) = signal
+		cellml_dt = 0.05
+		interval_dt = dt/3600.	! Cell_cycle uses time unit = hour
+		do_solve = .true.
 !		g_rate = 0.12	! 5
 !		R_max = 0.1		! 6
 !		Hill_Km = 0.33	! 7
@@ -363,11 +483,27 @@ do kcell = 1,nlist0
 		dx = xmax - cell_list(kcell)%site(1)
 		signal = signal_max*exp(-signal_decay_coef*dx)	
 		cell_list(kcell)%cellml_state(17) = signal	! Wnt
+		cellml_dt = 0.1
+		interval_dt = dt	! Wnt_Cyclin uses time unit = min
+		do_solve = (cell_list(kcell)%cell_cycle_phase == CELL_CYCLE_G0)
+!		do_solve = .true.
 	endif
-	call resetIntegrator
-	call setState(cell_list(kcell)%cellml_state)
-	call multiStep(0.0, interval_dt, cellml_dt);
-	call getState(cell_list(kcell)%cellml_state)
+	if (do_solve) then
+!		if (kcell == 1) then
+!			write(nflog,*) istep,kcell,cell_list(kcell)%cell_cycle_phase
+!		endif
+		ksim = cell_list(kcell)%ksim
+		call resetIntegrator(ksim)
+		call setState(ksim,cell_list(kcell)%cellml_state)
+		call multiStep(ksim,0.0, interval_dt, cellml_dt);
+		call getState(ksim,cell_list(kcell)%cellml_state)
+	endif
+!	if (kcell == 1) then
+!		write(nflog,*) 'state values for kcell: ',kcell
+!		do i = 0,5
+!			write(nflog,'(i4,f10.6)') i,cellml_state0(i)
+!		enddo
+!	endif
 	if (ReadyToDivide(kcell)) then
 	    ndivide = ndivide + 1
 	    divide_list(ndivide) = kcell
@@ -417,11 +553,13 @@ integer :: kpar=0
 integer :: j, k, kcell1, site0(3), site1(3), site2(3), site01(3), site(3), ichemo, nfree, bestsite(3)
 integer :: npath, path(3,200)
 real(REAL_KIND) :: tnow, R, size ! v, vmax, V0, Cex(MAX_CHEMO), M0(MAX_CHEMO), M1(MAX_CHEMO), alpha(MAX_CHEMO)
-logical :: freesite(27,3)
+logical :: freesite(27,3), outside
 type (boundary_type), pointer :: bdry
+integer :: x,y,z,xx,yy,zz
 
-if (kcell0 == -1) then
-	dbug = .true.
+dbug = .false.
+if (kcell0 == 1) then
+!	dbug = .true.
 	write(logmsg,*) 'CellDivider: ',kcell0
 	call logger(logmsg)
 endif
@@ -445,8 +583,9 @@ if (CellML_model == CELLML_CELL_CYCLE) then
 	cell_list(kcell0)%volume = size
 elseif (CellML_model == CELLML_WNT_CYCLIN) then
 	cell_list(kcell0)%cell_cycle_phase = CELL_CYCLE_G0
+	cell_list(kcell0)%cell_cycle_t = 0
 	cell_list(kcell0)%volume = 1
-	cell_list(kcell0)%cellml_state = state0
+	cell_list(kcell0)%cellml_state = cellml_state0
 endif
 
 site0 = cell_list(kcell0)%site
@@ -475,6 +614,9 @@ if (divide_option == DIVIDE_USE_CLEAR_SITE .or. &			! look for the best nearby c
 			site01 = freesite(j,:)
 		endif
 		call AddCell(kcell0,kcell1,site01,ok)
+		if (dbug) then
+			write(*,*) 'AddCell (1): ',nsites,ncells
+		endif
 		if (.not.ok) then
 			call logger('Error: AddCell: vacant site')
 		endif
@@ -486,24 +628,28 @@ endif
 do
 	j = random_int(1,6,kpar)
 	site01 = site0 + neumann(:,j)
-	if (site01(2) > ywall) exit
+	if (site01(2) > ysurface) exit
 enddo
 !if (dbug) write(*,*) 'CellDivider: ',kcell0,site0,occupancy(site0(1),site0(2),site0(3))%indx
+outside = .false.
 if (occupancy(site01(1),site01(2),site01(3))%indx(1) == OUTSIDE_TAG) then	! site01 is outside, use it directly
 	npath = 0
 	site1 = site0
+	if (dbug) write(*,*) 'site01 is OUTSIDE: npath: ',npath,nsites
 elseif (bdrylist_present(site01,bdrylist)) then	! site01 is on the boundary
 	npath = 1
 	site1 = site01
 	path(:,1) = site01
+	if (dbug) write(*,*) 'site01 is on the boundary: npath: ',npath,nsites
 else
 	call ChooseBdrysite(site01,site1)
 	if (occupancy(site1(1),site1(2),site1(3))%indx(1) == 0) then
 		write(*,*) 'after ChooseBdrysite: site1 is VACANT: ',site1
 		stop
 	endif
-	if (dbug) write(*,'(a,i6,9i4)') 'b4 ',kcell0,site0,site01,site1
 	call SelectPath(site0,site01,site1,path,npath)
+	if (dbug) write(*,*) 'site1 is on the boundary: npath: ',npath,nsites,site1,occupancy(site1(1),site1(2),site1(3))%indx(1)
+
 endif
 
 if (npath > 0) then
@@ -514,6 +660,7 @@ if (npath > 0) then
 	! path(:,:) now goes from site01 to site2, which is an outside site next to site1
 	if (occupancy(site2(1),site2(2),site2(3))%indx(1) == OUTSIDE_TAG) then
 		Nsites = Nsites + 1
+		outside = .true.
 		call RemoveFromMedium
 	endif
 !	write(*,'(a,3i4,i6)') 'outside site: ',site2,occupancy(site2(1),site2(2),site2(3))%indx(1)
@@ -526,7 +673,7 @@ endif
 !call GetPathMass(site0,site01,path,npath,M0)
 if (npath > 0) then
 	call PushPath(path,npath)
-	if (dbug) write(*,*) 'did push_path'
+	if (dbug) write(*,*) 'did push_path: nsites: ',nsites
 endif
 call AddCell(kcell0,kcell1,site01,ok)
 if (.not.ok) then
@@ -606,7 +753,7 @@ if (dbug) write(*,*) 'ChooseBdrysite: ',site0
 vc = site0 - Centre
 r = norm(vc)
 vc = vc/r
-if (ywall == 0) then
+if (.not.use_surface) then
 	rfrac = r/Radius
 	alpha_max = getAlphaMax(rfrac)
 	cosa_min = cos(alpha_max)
@@ -696,7 +843,7 @@ end subroutine
 !-----------------------------------------------------------------------------------------
 subroutine SelectPath(site0,site1,site2,path,npath)
 integer :: site0(3),site1(3), site2(3), path(3,200), npath
-integer :: v(3), jump(3), site(3), k, j, jmin
+integer :: v(3), jump(3), site(3), k, j, jmin, indx
 real(REAL_KIND) :: r, d2, d2min
 logical :: hit
 
@@ -722,7 +869,9 @@ do
 		v = site + jump
 		if (v(1)==site0(1) .and. v(2)==site0(2) .and. v(3)==site0(3)) cycle
 !		if (occupancy(v(1),v(2),v(3))%indx(1) == OUTSIDE_TAG) then
-		if (occupancy(v(1),v(2),v(3))%indx(1) <= 0) then	! outside or vacant - we'll use this!
+!		if (occupancy(v(1),v(2),v(3))%indx(1) <= 0) then	! outside or vacant - we'll use this!
+		indx = occupancy(v(1),v(2),v(3))%indx(1)
+		if (indx == 0 .or. indx == OUTSIDE_TAG) then	! outside or vacant - we'll use this!
 			site2 = site
 			hit = .true.
 			exit
@@ -825,7 +974,7 @@ end subroutine
 subroutine AddCell(kcell0,kcell1,site1,ok)
 integer :: kcell0, kcell1, site1(3)
 logical :: ok
-integer :: kpar = 0
+integer :: ksim, kpar = 0
 real(REAL_KIND) :: tnow, R, c_rate,r_mean
 
 ok = .true.
@@ -838,9 +987,9 @@ if (nlist > max_nlist) then
 endif
 Ncells = Ncells + 1
 kcell1 = nlist
-if (site1(2) <= ywall) then
-	write(*,*) 'AddCell: error: y < ywall: ',kcell0,kcell1,site1
-	write(nflog,*) 'AddCell: error: y < ywall: ',kcell0,kcell1,site1
+if (site1(2) <= ysurface) then
+	write(*,*) 'AddCell: error: y < ysurface: ',kcell0,kcell1,site1
+	write(nflog,*) 'AddCell: error: y < ysurface: ',kcell0,kcell1,site1
 	stop
 endif
 allocate(cell_list(kcell1)%cellml_state(0:nvariables-1))
@@ -856,8 +1005,19 @@ cell_list(kcell1)%volume = cell_list(kcell0)%volume
 if (CellML_model == CELLML_CELL_CYCLE) then
 	R = par_uni(kpar)
 	cell_list(kcell1)%divide_volume = Vdivide0 + dVdivide*(2*R-1)
+elseif (CellML_model == CELLML_WNT_CYCLIN) then
+	cell_list(kcell1)%cell_cycle_phase = cell_list(kcell0)%cell_cycle_phase
+	cell_list(kcell1)%cell_cycle_entry_time = cell_list(kcell0)%cell_cycle_entry_time
+	cell_list(kcell1)%cell_cycle_t = cell_list(kcell0)%cell_cycle_t
 endif
 occupancy(site1(1),site1(2),site1(3))%indx(1) = kcell1
+if (kcell1 <= MAX_SIMULATORS) then
+	ksim = kcell1
+	call setupCellmlSimulator(ksim,cellmlfile)
+else
+	ksim = mod(kcell1-1,MAX_SIMULATORS) + 1
+endif
+cell_list(kcell1)%ksim = ksim
 end subroutine
 
 !-----------------------------------------------------------------------------------------
@@ -872,9 +1032,9 @@ rmin = 1.0e10
 rmax = 0
 do kcell = 1,nlist
 	site = cell_list(kcell)%site
-	if (site(2) <= ywall) then
-		write(*,*) 'check_bdry: Error: y <= ywall: ',kcell, site
-		write(nflog,*) 'check_bdry: Error: y <= ywall: ',kcell, site
+	if (site(2) <= ysurface) then
+		write(*,*) 'check_bdry: Error: y <= ysurface: ',kcell, site
+		write(nflog,*) 'check_bdry: Error: y <= ysurface: ',kcell, site
 		stop
 	endif
 	bdry = .false.

@@ -4,7 +4,7 @@ use boundary
 use chemokine
 use cellstate
 use winsock  
-use csim_abm
+use csim_abm_mp
 
 IMPLICIT NONE
 
@@ -23,6 +23,7 @@ cellmlfile = ' '
 do k = 1,buflen
 	cellmlfile(k:k) = file_array(k)
 enddo
+write(*,*) cellmlfile
 call loadCellML
 nvar = nvariables
 ncomp = ncomponents
@@ -34,14 +35,19 @@ end subroutine
 subroutine loadCellML
 character(64) :: ID, comp_name
 logical :: hit
-integer :: nlen, k, i, clen
+integer :: nlen, k, i, clen, ksim
 
+write(nflog,'(a)') 'loadCellML: cellmlfile:'
+write(nflog,'(a)') cellmlfile
+call freeCellmlSimulators
+ksim = 0
 if (allocated(IDlist)) deallocate(IDlist)
 if (allocated(csim_state)) deallocate(csim_state)
 if (allocated(csim_savestate)) deallocate(csim_savestate)
 if (allocated(component)) deallocate(component)
-call setupCellml(cellmlfile)
-call getNvariables(nvariables)
+!call setupCellml(cellmlfile)
+call setupCellmlSimulator(ksim,cellmlfile)
+call getNvariables(ksim,nvariables)
 write(nflog,*) 'nvariables: ',nvariables
 allocate(IDlist(0:nvariables-1))
 allocate(csim_state(0:nvariables-1))
@@ -50,7 +56,7 @@ allocate(component(0:nvariables-1))
 
 ncomponents = 0
 do k = 0,nvariables-1
-	call getID(k,ID,clen)
+	call getID(ksim,k,ID,clen)
 !	IDlist(k)%name = ID(1:clen)
 	i = index(ID,'.')
 	comp_name = ID(1:i-1)
@@ -76,11 +82,12 @@ do k = 0,nvariables-1
 		endif
 	endif		
 enddo
+call getState(ksim,csim_state)
 write(nflog,*) 'Components: #: ',ncomponents
 write(nflog,'(a)') component(0:ncomponents-1)
 write(nflog,*) 'Variables: '
 do k = 0,nvariables-1
-	write(nflog,'(i4,2x,2a30,i3)') k,IDlist(k)%comp_name(1:30),IDlist(k)%var_name(1:30),IDlist(k)%comp_index
+	write(nflog,'(i4,2x,2a30,i3,f10.6)') k,IDlist(k)%comp_name(1:30),IDlist(k)%var_name(1:30),IDlist(k)%comp_index,csim_state(k)
 enddo
 end subroutine
 
@@ -89,7 +96,7 @@ end subroutine
 subroutine setCellStateVectors
 integer :: k
 do k = 1,nlist
-	call getState(cell_list(k)%cellml_state)
+	call getState(k,cell_list(k)%cellml_state)
 enddo
 end subroutine
 
@@ -156,11 +163,18 @@ call SetupChemo
 if (.not.use_TCP) then
 	call loadCellML
 endif
+! At this point, the CellmlSimulator csim_list[0].pcsim holds the initial parameter values and state variables
+! These values are copied into state0
+if (allocated(cellml_state0)) then
+	deallocate(cellml_state0)
+endif
+allocate(cellml_state0(0:nvariables-1))
+call getState(0,cellml_state0)
 
-allocate(state(0:nvariables-1))
-call getState(state)	! This gets the initial values of all state variables
+!allocate(state(0:nvariables-1))
+!call getState(0,state)	! This gets the initial values of all state variables
 if (CellML_model == CELLML_CELL_CYCLE) then
-	signal_max = state(4)	! Note that this is hard-wired for a specific CellML model!!!!!
+	signal_max = cellml_state0(4)	! Note that this may be hard-wired for a specific CellML model!!!!!
 elseif (CellML_model == CELLML_WNT_CYCLIN) then
 	cell_cycle_endtime(1) = cell_cycle_fraction(1)*cell_cycle_duration
 	cell_cycle_endtime(2) = cell_cycle_endtime(1) + cell_cycle_fraction(2)*cell_cycle_duration
@@ -168,7 +182,7 @@ elseif (CellML_model == CELLML_WNT_CYCLIN) then
 	cell_cycle_endtime(4) = cell_cycle_duration
 	cell_cycle_rate = 1/(cell_cycle_duration*(cell_cycle_fraction(1) + cell_cycle_fraction(2)))
 endif
-deallocate(state)
+!deallocate(state)
 
 call PlaceCells(ok)
 call SetRadius(Nsites)
@@ -379,7 +393,11 @@ x0 = (NX + 1.0)/2.        ! global value
 y0 = (NY + 1.0)/2.
 z0 = (NZ + 1.0)/2.
 Centre = (/x0,y0,z0/)   ! now, actually the global centre (units = grids)
-ywall = y0-1
+if (use_surface) then
+	ysurface = y0-1
+else
+	ysurface = 0
+endif
 call SetRadius(initial_count)
 write(logmsg,*) 'Initial radius, nc0, max_nlist: ',Radius, initial_count, max_nlist
 call logger(logmsg)
@@ -421,7 +439,7 @@ subroutine ReadCellParams(ok)
 logical :: ok
 integer :: i, imetab, itestcase, Nmm3, ichemo, iuse_extra, iuse_relax, iuse_par_relax
 integer :: iuse_oxygen, iuse_glucose, iuse_tracer, iV_depend, iV_random
-integer :: ictype, idisplay
+integer :: ictype, idisplay, iusesurface
 real(REAL_KIND) :: days, bdry_conc, percent
 real(REAL_KIND) :: sigma, DXmm
 character*(128) :: testfile
@@ -432,13 +450,14 @@ chemo(:)%used = .false.
 open(nfcell,file=inputfile,status='old')
 
 read(nfcell,*) NX							! size of grid
+read(nfcell,*) iusesurface
 read(nfcell,*) initial_count				! initial number of tumour cells
 read(nfcell,*) divide_time_median
 read(nfcell,*) divide_time_shape
 read(nfcell,*) iV_depend
 read(nfcell,*) iV_random
 read(nfcell,*) days							! number of days to simulate
-read(nfcell,*) DELTA_T						! time step size (sec)
+read(nfcell,*) DELTA_T						! time step size (mins)
 read(nfcell,*) NT_CONC						! number of subdivisions of DELTA_T for diffusion computation
 read(nfcell,*) Nmm3							! number of cells/mm^3
 read(nfcell,*) fluid_fraction				! fraction of the (non-necrotic) tumour that is fluid
@@ -498,7 +517,10 @@ read(nfcell,*) spcrad_value
 read(nfcell,*) iuse_extra
 read(nfcell,*) iuse_relax
 read(nfcell,*) iuse_par_relax
+read(nfcell,*) cell_cycle_duration	! hours
+read(nfcell,*) signal_max
 read(nfcell,*) signal_decay_coef
+read(nfcell,*) cyclin_threshold
 read(nfcell,'(a)') cellmlfile
 close(nfcell)
 
@@ -506,6 +528,7 @@ close(nfcell)
 cellmlfile = adjustl(cellmlfile)
 i = index(cellmlfile,' ')
 cellmlfile(i:i) = char(0)
+cell_cycle_duration = 60*cell_cycle_duration		! hours -> mins
 
 if (chemo(OXYGEN)%Hill_N /= 1 .and. chemo(OXYGEN)%Hill_N /= 2) then
 	call logger('Error: OXYGEN_HILL_N must be 1 or 2')
@@ -522,6 +545,7 @@ ANOXIA_THRESHOLD = ANOXIA_THRESHOLD/1000			! uM -> mM
 O2cutoff = O2cutoff/1000							! uM -> mM
 relax = (iuse_relax == 1)
 use_parallel = (iuse_par_relax == 1)
+use_surface = (iusesurface == 1)
 chemo(OXYGEN)%used = (iuse_oxygen == 1)
 chemo(GLUCOSE)%used = (iuse_glucose == 1)
 chemo(TRACER)%used = (iuse_tracer == 1)
@@ -570,8 +594,8 @@ open(nfout,file=outputfile,status='replace')
 write(logmsg,*) 'Opened nfout: ',outputfile
 call logger(logmsg)
 
-Nsteps = days*24*60*60/DELTA_T		! DELTA_T in seconds
-write(logmsg,'(a,2i6,f6.0)') 'nsteps, NT_CONC, DELTA_T: ',nsteps,NT_CONC,DELTA_T
+Nsteps = days*24*60/DELTA_T		! DELTA_T in mins
+write(logmsg,'(a,i6,f6.0)') 'nsteps, DELTA_T: ',nsteps,DELTA_T
 call logger(logmsg)
 
 ok = .true.
@@ -582,25 +606,35 @@ end subroutine
 !-----------------------------------------------------------------------------------------
 subroutine PlaceCells(ok)
 logical :: ok
-integer :: x, y, z, k, site(3), ichemo, i, kpar=0
+integer :: x, y, z, k, site(3), ichemo, i, ksim, kpar=0
 real(REAL_KIND) :: r2lim,r2,rad(3)
 real(REAL_KIND) :: R, tpast, tdiv, c_rate, r_mean
 real(REAL_KIND) :: tcycle
+logical :: randomise_initial_tcycle = .true.
 !real(REAL_KIND),allocatable :: state(:)
 
-allocate(state0(0:nvariables-1))
-call getState(state0)
+!if (allocated(cellml_state0)) then
+!	deallocate(cellml_state0)
+!endif
+!allocate(cellml_state0(0:nvariables-1))
+!call getState(0,cellml_state0)
+write(nflog,*) 'PlaceCells: cellml_state0:'
+do i = 0,nvariables-1
+	write(nflog,'(i4,f10.6)') i,cellml_state0(i)
+enddo
 occupancy(:,:,:)%indx(1) = OUTSIDE_TAG
-occupancy(:,1:ywall,:)%indx(1) = INACCESSIBLE_TAG
+if (use_surface) then
+	occupancy(:,1:ysurface,:)%indx(1) = INACCESSIBLE_TAG
+endif
 Radius = max(Radius,1.)
 r2lim = Radius*Radius
-if (ywall > 0) then
+if (use_surface) then
 	r2lim = sqrt(2.0)*r2lim
 endif
 lastID = 0
 k = 0
 do x = 1,NX
-	do y = ywall+1,NY
+	do y = ysurface+1,NY
 		do z = 1,NZ
 			rad = (/x-x0,y-y0,z-z0/)
 			r2 = dot_product(rad,rad)
@@ -613,7 +647,7 @@ do x = 1,NX
 				cell_list(k)%exists = .true.
 				cell_list(k)%active = .true.
 				allocate(cell_list(k)%cellml_state(0:nvariables-1))
-				cell_list(k)%cellml_state = state0
+				cell_list(k)%cellml_state = cellml_state0
 				if (CellML_model == CELLML_CELL_CYCLE) then
 					cell_list(k)%state = 1
 					cell_list(k)%celltype = random_choice(celltype_fraction,Ncelltypes,kpar)
@@ -636,27 +670,39 @@ do x = 1,NX
 					cell_list(k)%cellml_state(1) = 1.0 + (2.2 - 1.0)*R	! growth
 					cell_list(k)%cellml_state(2) = 1.0 + (2.0 - 1.0)*R	! size
 				elseif (CellML_model == CELLML_WNT_CYCLIN) then
-					R = par_uni(kpar)
-					tcycle = R*cell_cycle_duration
+					if (randomise_initial_tcycle) then
+						R = par_uni(kpar)
+						tcycle = R*cell_cycle_duration
+					else
+						tcycle = 0.001
+					endif
 					cell_list(k)%cell_cycle_t = tcycle
 					cell_list(k)%cell_cycle_entry_time = -tcycle
-					call UpdateCellCycle(i,tcycle)
-!					do i = 1,4
-!						if (tcycle <= cell_cycle_endtime(i)) then
-!							cell_list(k)%cell_cycle_phase = i
-!							if (i == 1) then
-!								cell_list(k)%volume = 1 + cell_cycle_rate*tcycle
-!							elseif (i == 2) then
-!								cell_list(k)%volume = 1 + cell_cycle_rate*cell_cycle_endtime(1)
-!							elseif (i == 3) then
-!								cell_list(k)%volume = 1 + cell_cycle_rate*(cell_cycle_endtime(1) + tcycle)
-!							else
-!								cell_list(k)%volume = 2
-!							endif
-!							exit
-!						endif
-!					enddo
+!					call UpdateCellCycle(k,tcycle)
+					do i = 1,4
+						if (tcycle <= cell_cycle_endtime(i)) then
+							cell_list(k)%cell_cycle_phase = i
+							if (i == 1) then
+								cell_list(k)%volume = 1 + cell_cycle_rate*tcycle
+							elseif (i == 2) then
+								cell_list(k)%volume = 1 + cell_cycle_rate*cell_cycle_endtime(1)
+							elseif (i == 3) then
+								cell_list(k)%volume = 1 + cell_cycle_rate*(cell_cycle_endtime(1) + tcycle)
+							else
+								cell_list(k)%volume = 2
+							endif
+							exit
+						endif
+					enddo
 				endif
+				if (k <= MAX_SIMULATORS) then
+					ksim = k
+					call setupCellmlSimulator(ksim,cellmlfile)
+				else
+					ksim = mod(k-1,MAX_SIMULATORS) + 1
+				endif
+				cell_list(k)%ksim = ksim
+				
 !				cell_list(k)%conc(OXYGEN) = chemo(OXYGEN)%bdry_conc
 !				cell_list(k)%conc(GLUCOSE) = chemo(GLUCOSE)%bdry_conc
 !				cell_list(k)%conc(TRACER) = chemo(TRACER)%bdry_conc
@@ -688,7 +734,7 @@ Nreuse = 0
 ok = .true.
 write(logmsg,*) 'idbug: ',idbug
 call logger(logmsg)
-write(nflog,*) 'ncells, nsites, ywall: ',ncells,nsites,ywall
+write(nflog,*) 'ncells, nsites, ysurface: ',ncells,nsites,ysurface
 end subroutine
 
 
@@ -762,10 +808,17 @@ if (Ncells == 0) then
 	call logger(logmsg)
     return
 endif
-nthour = 3600/DELTA_T
-dt = DELTA_T/NT_CONC
+nthour = 60/DELTA_T
+if (nsites /= ncells) then
+	write(logmsg,*) 'Error: simulate_step: nsites /= ncells: ',istep,nsites,ncells
+	call logger(logmsg)
+	res = 2
+	return
+endif
+!dt = DELTA_T/NT_CONC
 if (mod(istep,nthour) == 0) then
-	write(logmsg,*) 'istep, hour: ',istep,istep/nthour,nlist,ncells,nsites-ncells
+	write(logmsg,'(a,3i6,e12.3)') 'istep, hour, ncells: ',istep,istep/nthour,ncells,cell_list(1)%cellml_state(58)
+		!,cell_list(1)%cell_cycle_phase,cell_list(1)%cell_cycle_t
 	call logger(logmsg)
 	if (bdry_changed) then
 		write(nflog,*) 'UpdateBdryList'
@@ -803,7 +856,7 @@ endif
 	call UpdateCbnd
 	call SetupODEdiff
 	call SiteCellToState
-	
+
 !	do it_solve = 1,NT_CONC
 !		tstart = (it_solve-1)*dt
 !		t_simulation = (istep-1)*DELTA_T + tstart
@@ -954,7 +1007,11 @@ do kcell = 1,nlist
 			TC_list(j+5) = cell_g*100			! 100*growth_stage
 			TC_list(j+6) = min(1.0,cell_r)*100	! 100*fractional radius
 		elseif (CellML_model == CELLML_WNT_CYCLIN) then
-			cell_g = cell_list(kcell)%cell_cycle_t/cell_cycle_duration
+			if (cell_list(kcell)%cell_cycle_phase == 0) then
+				cell_g = 0
+			else
+				cell_g = cell_list(kcell)%cell_cycle_t/cell_cycle_duration
+			endif
 			cell_size = cell_list(kcell)%volume
 			cell_r = (cell_size/cell_size_max)**(1./3.)
 			TC_list(j+5) = cell_g*100			! 100*growth_stage
@@ -1045,7 +1102,7 @@ integer :: Ndead, Ntagged, Ntodie, Ntagdead, diam_um, vol_mm3_100000
 integer :: ngrowth(3), growth_percent_10, necrotic_percent_10,Ntagged_anoxia
 real(REAL_KIND) :: vol_cm3, vol_mm3, hour
 
-hour = istep*DELTA_T/3600.
+hour = istep*DELTA_T/60.
 vol_cm3 = Vsite_cm3*Nsites			! total volume in cm^3
 vol_mm3 = vol_cm3*1000				! volume in mm^3
 vol_mm3_100000 = vol_mm3*100000		! 100000 * volume in mm^3
@@ -1365,7 +1422,7 @@ real(c_double) :: variable_value
 integer :: nv, i
 
 write(nflog,*) 'CellML_get_variable_value: ',icomp,ivar
-call getState(csim_state)
+call getState(0,csim_state)
 !write(nflog,'(10f7.3)') csim_state
 nv = 0
 do i = 0,nvariables-1
@@ -1395,7 +1452,7 @@ nv = 0
 do i = 0,nvariables-1
 	if (IDlist(i)%comp_index == icomp) then
 		if (ivar == nv) then
-			call setStateValue(i,variable_value)
+			call setStateValue(0,i,variable_value)
 			write(nflog,*) icomp,ivar,variable_value
 			return
 		endif

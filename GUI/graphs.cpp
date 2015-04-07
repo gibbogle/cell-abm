@@ -33,13 +33,13 @@ GRAPH_SET tsGraphSet[] = {
     "Diameter",
     "Diameter (um)",
      "Diameter (um)",
-    4, true, 0, 1, true},
+    4, false, 0, 1, true},
 
     {"volume",
     "Volume",
     "Volume (mm3)",
      "Volume (mm3)",
-    5, true, 0, 0.00001, true},
+    5, false, 0, 0.00001, true},
 
     {"growthfraction",
     "Slow growth Fraction",
