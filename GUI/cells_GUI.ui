@@ -2644,8 +2644,8 @@ padding: 8px
        <widget class="QSlider" name="verticalSliderTransparency">
         <property name="geometry">
          <rect>
-          <x>890</x>
-          <y>30</y>
+          <x>1350</x>
+          <y>10</y>
           <width>19</width>
           <height>221</height>
          </rect>
@@ -2663,8 +2663,8 @@ padding: 8px
        <widget class="QLabel" name="alabel_Transparency">
         <property name="geometry">
          <rect>
-          <x>880</x>
-          <y>260</y>
+          <x>1340</x>
+          <y>240</y>
           <width>71</width>
           <height>16</height>
          </rect>
@@ -2676,10 +2676,10 @@ padding: 8px
        <widget class="QGroupBox" name="groupBox_display">
         <property name="geometry">
          <rect>
-          <x>960</x>
+          <x>840</x>
           <y>30</y>
-          <width>431</width>
-          <height>121</height>
+          <width>181</width>
+          <height>181</height>
          </rect>
         </property>
         <property name="title">
@@ -2688,8 +2688,8 @@ padding: 8px
         <widget class="QComboBox" name="comboBox_CELLCOLOUR_2">
          <property name="geometry">
           <rect>
-           <x>220</x>
-           <y>80</y>
+           <x>110</x>
+           <y>90</y>
            <width>61</width>
            <height>22</height>
           </rect>
@@ -2701,10 +2701,10 @@ padding: 8px
         <widget class="QCheckBox" name="checkBox_CELLDISPLAY_2">
          <property name="geometry">
           <rect>
-           <x>220</x>
-           <y>50</y>
+           <x>70</x>
+           <y>90</y>
            <width>16</width>
-           <height>18</height>
+           <height>21</height>
           </rect>
          </property>
          <property name="text">
@@ -2717,8 +2717,8 @@ padding: 8px
         <widget class="QLabel" name="alabel_display">
          <property name="geometry">
           <rect>
-           <x>10</x>
-           <y>50</y>
+           <x>60</x>
+           <y>10</y>
            <width>46</width>
            <height>13</height>
           </rect>
@@ -2730,10 +2730,10 @@ padding: 8px
         <widget class="QCheckBox" name="checkBox_CELLDISPLAY_1">
          <property name="geometry">
           <rect>
-           <x>150</x>
-           <y>50</y>
+           <x>70</x>
+           <y>60</y>
            <width>16</width>
-           <height>16</height>
+           <height>21</height>
           </rect>
          </property>
          <property name="text">
@@ -2746,10 +2746,10 @@ padding: 8px
         <widget class="QLabel" name="alabel_display_1">
          <property name="geometry">
           <rect>
-           <x>150</x>
-           <y>20</y>
-           <width>41</width>
-           <height>16</height>
+           <x>30</x>
+           <y>60</y>
+           <width>21</width>
+           <height>21</height>
           </rect>
          </property>
          <property name="text">
@@ -2759,10 +2759,10 @@ padding: 8px
         <widget class="QLabel" name="alabel_display_2">
          <property name="geometry">
           <rect>
-           <x>220</x>
-           <y>20</y>
-           <width>41</width>
-           <height>16</height>
+           <x>30</x>
+           <y>90</y>
+           <width>21</width>
+           <height>21</height>
           </rect>
          </property>
          <property name="text">
@@ -2772,8 +2772,8 @@ padding: 8px
         <widget class="QComboBox" name="comboBox_CELLCOLOUR_1">
          <property name="geometry">
           <rect>
-           <x>150</x>
-           <y>80</y>
+           <x>110</x>
+           <y>60</y>
            <width>61</width>
            <height>22</height>
           </rect>
@@ -2785,10 +2785,10 @@ padding: 8px
         <widget class="QLabel" name="alabel_cellcolour">
          <property name="geometry">
           <rect>
-           <x>10</x>
-           <y>80</y>
-           <width>51</width>
-           <height>21</height>
+           <x>120</x>
+           <y>6</y>
+           <width>41</width>
+           <height>20</height>
           </rect>
          </property>
          <property name="text">
@@ -2798,10 +2798,10 @@ padding: 8px
         <widget class="QCheckBox" name="checkBox_CELLDISPLAY_3">
          <property name="geometry">
           <rect>
-           <x>290</x>
-           <y>50</y>
+           <x>70</x>
+           <y>120</y>
            <width>16</width>
-           <height>18</height>
+           <height>21</height>
           </rect>
          </property>
          <property name="text">
@@ -2814,8 +2814,8 @@ padding: 8px
         <widget class="QComboBox" name="comboBox_CELLCOLOUR_3">
          <property name="geometry">
           <rect>
-           <x>290</x>
-           <y>80</y>
+           <x>110</x>
+           <y>120</y>
            <width>61</width>
            <height>22</height>
           </rect>
@@ -2827,10 +2827,10 @@ padding: 8px
         <widget class="QLabel" name="alabel_display_3">
          <property name="geometry">
           <rect>
-           <x>290</x>
-           <y>20</y>
-           <width>41</width>
-           <height>16</height>
+           <x>30</x>
+           <y>120</y>
+           <width>21</width>
+           <height>21</height>
           </rect>
          </property>
          <property name="text">
@@ -2840,10 +2840,10 @@ padding: 8px
         <widget class="QLabel" name="alabel_display_4">
          <property name="geometry">
           <rect>
-           <x>360</x>
-           <y>20</y>
-           <width>41</width>
-           <height>16</height>
+           <x>30</x>
+           <y>150</y>
+           <width>21</width>
+           <height>21</height>
           </rect>
          </property>
          <property name="text">
@@ -2853,10 +2853,10 @@ padding: 8px
         <widget class="QCheckBox" name="checkBox_CELLDISPLAY_4">
          <property name="geometry">
           <rect>
-           <x>360</x>
-           <y>50</y>
+           <x>70</x>
+           <y>150</y>
            <width>16</width>
-           <height>18</height>
+           <height>21</height>
           </rect>
          </property>
          <property name="text">
@@ -2869,8 +2869,8 @@ padding: 8px
         <widget class="QComboBox" name="comboBox_CELLCOLOUR_4">
          <property name="geometry">
           <rect>
-           <x>360</x>
-           <y>80</y>
+           <x>110</x>
+           <y>150</y>
            <width>61</width>
            <height>22</height>
           </rect>
@@ -2882,10 +2882,10 @@ padding: 8px
         <widget class="QLabel" name="alabel_display_0">
          <property name="geometry">
           <rect>
-           <x>80</x>
-           <y>20</y>
-           <width>41</width>
-           <height>16</height>
+           <x>30</x>
+           <y>30</y>
+           <width>21</width>
+           <height>21</height>
           </rect>
          </property>
          <property name="text">
@@ -2895,10 +2895,10 @@ padding: 8px
         <widget class="QCheckBox" name="checkBox_CELLDISPLAY_0">
          <property name="geometry">
           <rect>
-           <x>80</x>
-           <y>50</y>
+           <x>70</x>
+           <y>30</y>
            <width>16</width>
-           <height>16</height>
+           <height>21</height>
           </rect>
          </property>
          <property name="text">
@@ -2911,8 +2911,8 @@ padding: 8px
         <widget class="QComboBox" name="comboBox_CELLCOLOUR_0">
          <property name="geometry">
           <rect>
-           <x>80</x>
-           <y>80</y>
+           <x>110</x>
+           <y>30</y>
            <width>61</width>
            <height>22</height>
           </rect>
@@ -2921,16 +2921,6 @@ padding: 8px
           <number>-1</number>
          </property>
         </widget>
-       </widget>
-       <widget class="QWidget" name="widget_dialog" native="true">
-        <property name="geometry">
-         <rect>
-          <x>860</x>
-          <y>330</y>
-          <width>120</width>
-          <height>80</height>
-         </rect>
-        </property>
        </widget>
       </widget>
       <widget class="QWidget" name="page_2D">
