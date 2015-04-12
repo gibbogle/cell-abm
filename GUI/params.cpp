@@ -56,9 +56,9 @@ The shape value must be greater than 1, and values close to 1 give distributions
 "Length of main time step, for cell death, division, etc.  Should be a divisor of 3600. \n\
 [mins]"},
 
-{"NT_CONC", 1, 0, 0,
-"Number of ODE solver sub-steps.",
-"The number of subdivisions of the major time step, for the ODE diffusion-reaction solver."},
+//{"NT_CONC", 1, 0, 0,
+//"Number of ODE solver sub-steps.",
+//"The number of subdivisions of the major time step, for the ODE diffusion-reaction solver."},
 
 {"NMM3", 500000, 0, 0,
 "Cells/cubic mm",
@@ -68,13 +68,13 @@ The shape value must be greater than 1, and values close to 1 give distributions
 "Fluid fraction",
 "Fraction of non-necrotic tumour that is extracellular fluid."},
 
-{"MEDIUM_VOLUME", 1.0, 0, 0,
-"Medium volume",
-"Volume of the medium in which the spheroid is growing."},
+//{"MEDIUM_VOLUME", 1.0, 0, 0,
+//"Medium volume",
+//"Volume of the medium in which the spheroid is growing."},
 
-{"UNSTIRRED_LAYER", 0.01, 0, 0,
-"Unstirred layer width",
-"Thickness of the unstirred layer around the spheroid."},
+//{"UNSTIRRED_LAYER", 0.01, 0, 0,
+//"Unstirred layer width",
+//"Thickness of the unstirred layer around the spheroid."},
 
 {"VDIVIDE0", 1.6, 0, 0,
 "Nominal divide volume",
@@ -103,9 +103,9 @@ The shape value must be greater than 1, and values close to 1 give distributions
 "Time taken for a cell to die after it is tagged to die of anoxia.\n\
 [h]"},
 
-{"TEST_CASE", 0, 0, 0,
-"Test case #",
-"Number of the test case to run.  The default value of 0 is for a normal run"},
+//{"TEST_CASE", 0, 0, 0,
+//"Test case #",
+//"Number of the test case to run.  The default value of 0 is for a normal run"},
 
 {"SEED1", 1234, 0, 0,
 "First RNG seed",
@@ -143,9 +143,9 @@ The shape value must be greater than 1, and values close to 1 give distributions
  "Animation interval (timesteps)",
  "Interval between animation screen updates (timesteps).  One timestep = 15 sec."},
 
-{"SHOW_PROGENY", 0, 0, 0,
- "Show descendents of cell #",
- "All the descendents of cell with the specified ID are highlighted.  (0 = no selection)"},
+//{"SHOW_PROGENY", 0, 0, 0,
+// "Show descendents of cell #",
+// "All the descendents of cell with the specified ID are highlighted.  (0 = no selection)"},
 
 {"USE_OXYGEN", 1, 0, 1,
 "Use Oxygen?",

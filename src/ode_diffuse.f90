@@ -1502,7 +1502,7 @@ real(REAL_KIND) :: state(:)
 integer :: x, y, z, i, site(3), nz
 real(REAL_KIND) :: smin, smax
 
-write(*,*) 'InitState: ',chemo(ichemo)%name,chemo(ichemo)%bdry_conc
+!write(*,*) 'InitState: ',chemo(ichemo)%name,chemo(ichemo)%bdry_conc
 write(logmsg,*) 'InitState: ',chemo(ichemo)%name
 call logger(logmsg)
 smin = 1.0e10
@@ -1712,7 +1712,7 @@ do k = 1,nt
 enddo
 
 t2 = wtime()
-write(*,'(a,f10.1)') 'Time: ',t2-t1
+!write(*,'(a,f10.1)') 'Time: ',t2-t1
 
 !	do x = 1,NX
 !		do y = 1,NY

@@ -23,7 +23,6 @@ cellmlfile = ' '
 do k = 1,buflen
 	cellmlfile(k:k) = file_array(k)
 enddo
-write(*,*) cellmlfile
 call loadCellML
 nvar = nvariables
 ncomp = ncomponents
@@ -158,7 +157,7 @@ call ArrayInitialisation(ok)
 if (.not.ok) return
 call logger('did ArrayInitialisation')
 
-call SetupChemo
+!call SetupChemo
 
 if (.not.use_TCP) then
 	call loadCellML
@@ -196,7 +195,7 @@ call CreateBdryList
 
 call SetupODEdiff
 call InitConcs
-call SetupMedium
+!call SetupMedium
 call AdjustMM
 
 !call setCellStateVectors
@@ -458,18 +457,18 @@ read(nfcell,*) iV_depend
 read(nfcell,*) iV_random
 read(nfcell,*) days							! number of days to simulate
 read(nfcell,*) DELTA_T						! time step size (mins)
-read(nfcell,*) NT_CONC						! number of subdivisions of DELTA_T for diffusion computation
+!read(nfcell,*) NT_CONC						! number of subdivisions of DELTA_T for diffusion computation
 read(nfcell,*) Nmm3							! number of cells/mm^3
 read(nfcell,*) fluid_fraction				! fraction of the (non-necrotic) tumour that is fluid
-read(nfcell,*) medium_volume0				! initial total volume (medium + spheroid) (cm^3)
-read(nfcell,*) d_layer						! thickness of the unstirred layer around the spheroid (cm)
+!read(nfcell,*) medium_volume0				! initial total volume (medium + spheroid) (cm^3)
+!read(nfcell,*) d_layer						! thickness of the unstirred layer around the spheroid (cm)
 read(nfcell,*) Vdivide0						! nominal cell volume multiple for division
 read(nfcell,*) dVdivide						! variation about nominal divide volume
 read(nfcell,*) MM_THRESHOLD					! O2 concentration threshold Michaelis-Menten "soft-landing" (uM)
 read(nfcell,*) ANOXIA_THRESHOLD			    ! O2 threshold for anoxia (uM)
 read(nfcell,*) anoxia_tag_hours				! hypoxic time leading to tagging to die by anoxia (h)
 read(nfcell,*) anoxia_death_hours			! time after tagging to death by anoxia (h)
-read(nfcell,*) itestcase                    ! test case to simulate
+!read(nfcell,*) itestcase                    ! test case to simulate
 read(nfcell,*) seed(1)						! seed vector(1) for the RNGs
 read(nfcell,*) seed(2)						! seed vector(2) for the RNGs
 read(nfcell,*) ncpu_input					! for GUI just a placeholder for ncpu, used only when execute parameter ncpu = 0
@@ -481,7 +480,7 @@ do ictype = 1,Ncelltypes
 !	celltype_display(ictype) = (idisplay == 1)
 enddo
 read(nfcell,*) NT_GUI_OUT					! interval between GUI outputs (timesteps)
-read(nfcell,*) show_progeny                 ! if != 0, the number of the cell to show descendents of
+!read(nfcell,*) show_progeny                 ! if != 0, the number of the cell to show descendents of
 read(nfcell,*) iuse_oxygen		! chemo(OXYGEN)%used
 read(nfcell,*) chemo(OXYGEN)%diff_coef
 read(nfcell,*) chemo(OXYGEN)%medium_diff_coef
@@ -529,6 +528,8 @@ cellmlfile = adjustl(cellmlfile)
 i = index(cellmlfile,' ')
 cellmlfile(i:i) = char(0)
 cell_cycle_duration = 60*cell_cycle_duration		! hours -> mins
+
+show_progeny = 0
 
 if (chemo(OXYGEN)%Hill_N /= 1 .and. chemo(OXYGEN)%Hill_N /= 2) then
 	call logger('Error: OXYGEN_HILL_N must be 1 or 2')
@@ -585,9 +586,9 @@ call logger(logmsg)
 
 ! Setup test_case
 test_case = .false.
-if (itestcase /= 0) then
-    test_case(itestcase) = .true.
-endif
+!if (itestcase /= 0) then
+!    test_case(itestcase) = .true.
+!endif
 
 if (mod(NX,2) /= 0) NX = NX+1					! ensure that NX is even
 open(nfout,file=outputfile,status='replace')
